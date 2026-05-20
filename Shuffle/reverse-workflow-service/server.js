@@ -28,7 +28,7 @@ app.post("/api/reverse-workflow", async (req, res) => { //endpoint untuk menerim
     // console.dir(parsedWorkflow, { depth: null }) // menampilkan hasil parsing workflow di console untuk debugging
 
     // 3. Memanggil fungsi buildGraph dengan hasil parsing workflow untuk mendapatkan struktur graph yang terdiri dari nodes dan relationships
-    const graphData = buildGraph(parsedWorkflow) // memanggil fungsi buildGraph dengan hasil parsing workflow untuk mendapatkan struktur graph yang terdiri dari nodes dan relationships
+    const graphData = buildGraph(parsedWorkflow, workflow_id, workflow_name) // memanggil fungsi buildGraph dengan hasil parsing workflow untuk mendapatkan struktur graph yang terdiri dari nodes dan relationships dengan parameter parsedWorkflow, workflowId, dan workflowName
     // console.dir(graphData, { depth: null }) // menampilkan hasil building graph di console untuk debugging
 
     // 4. Melakukan operasi dengan graphData, seperti menyimpan ke database Neo4j atau melakukan analisis lebih lanjut

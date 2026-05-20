@@ -8,39 +8,43 @@ const saveGraphToNeo4j = async (graphData) => {
   try {
     // simpan nodes
     for (const node of graphData.nodes) {
+
+      // default type jika kosong
+      const nodeType = node.type || "ACTION"
+
       await session.run(
         `
-        MERGE (n:Action {id: $id})
-        SET n.label = $label,
-            n.app_name = $app_name,
-            n.action_name = $action_name,
-            n.category = $category
+        MERGE (n:Entity:${nodeType} {id: $id})
+        SET n.id = $id
+        SET n += $properties
         `,
         {
           id: node.id,
-          label: node.properties.label,
-          app_name: node.properties.app_name,
-          action_name: node.properties.action_name,
-          category: node.properties.category,
+          properties: node.properties || {},
         }
       )
     }
     // simpan relationships
     for (const rel of graphData.relationships) {
+    
+    // console.log("REL:", rel) // menampilkan isi rel yang akan disimpan ke database Neo4j untuk debugging
 
     const relationshipType = rel.type || "CONNECTS_TO"
 
     await session.run(
-        `
-        MATCH (a:Action {id: $source})
-        MATCH (b:Action {id: $target})
+      `
+      MATCH (a:Entity)
+      WHERE a.id = $source
 
-        MERGE (a)-[r:${relationshipType}]->(b)
-        `,
-        {
+      MATCH (b:Entity)
+      WHERE b.id = $target
+
+      MERGE (a)-[r:${relationshipType}]->(b)
+      `,
+      {
         source: rel.source,
         target: rel.target,
-        }
+      }
     )
     }
 
