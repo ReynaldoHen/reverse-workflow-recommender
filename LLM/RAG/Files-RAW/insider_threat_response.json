@@ -1,0 +1,107 @@
+{
+  "id": "wf-insider-threat-response-v1",
+  "name": "Insider Threat and Privileged Access Abuse",
+  "description": "Responds to alerts indicating insider threat behaviour or privileged access abuse. Collects audit logs for the user, checks for abnormal access patterns (off-hours, mass downloads, unusual destinations), temporarily elevates monitoring, and escalates to HR and legal if evidence warrants.",
+  "start": "node_parse_alert",
+  "sharing": "private",
+  "tags": ["insider-threat", "T1078", "T1098", "privileged-access", "audit"],
+  "triggers": [
+    {
+      "id": "trigger_ueba",
+      "name": "UEBA / SIEM Alert",
+      "app_name": "Webhook",
+      "trigger_type": "WEBHOOK",
+      "description": "Receives insider threat or anomalous user behaviour alert from UEBA or SIEM"
+    }
+  ],
+  "actions": [
+    {
+      "id": "node_parse_alert",
+      "name": "Parse Alert",
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "action": "repeat_back_to_me",
+      "description": "Extract user, anomaly type, time window, risk score, accessed resources",
+      "parameters": [{"name": "call", "value": "$exec"}],
+      "position": {"x": 100, "y": 100}
+    },
+    {
+      "id": "node_collect_audit_logs",
+      "name": "Collect 30-Day Audit Log",
+      "app_name": "Splunk",
+      "app_version": "1.0.0",
+      "action": "search",
+      "description": "Pull last 30 days of user audit events from SIEM for baseline comparison",
+      "parameters": [
+        {"name": "query", "value": "index=audit user=$node_parse_alert.username earliest=-30d"},
+        {"name": "earliest_time", "value": "-30d"},
+        {"name": "latest_time", "value": "now"}
+      ],
+      "position": {"x": 100, "y": 250}
+    },
+    {
+      "id": "node_get_ad_groups",
+      "name": "Review User Privileges",
+      "app_name": "Active Directory",
+      "app_version": "1.0.0",
+      "action": "get_user",
+      "description": "List all AD group memberships and privileged roles for the user",
+      "parameters": [
+        {"name": "username", "value": "$node_parse_alert.username"}
+      ],
+      "position": {"x": 350, "y": 250}
+    },
+    {
+      "id": "node_enable_enhanced_logging",
+      "name": "Enable Enhanced Monitoring",
+      "app_name": "Splunk",
+      "app_version": "1.0.0",
+      "action": "create_watchlist",
+      "description": "Add user to enhanced monitoring watchlist for 30 days",
+      "parameters": [
+        {"name": "user", "value": "$node_parse_alert.username"},
+        {"name": "reason", "value": "Insider threat investigation"},
+        {"name": "duration_days", "value": "30"}
+      ],
+      "position": {"x": 100, "y": 400}
+    },
+    {
+      "id": "node_create_restricted_case",
+      "name": "Create Restricted Case",
+      "app_name": "TheHive",
+      "app_version": "1.0.0",
+      "action": "create_case",
+      "description": "Create a restricted-access case visible only to senior analysts and legal",
+      "parameters": [
+        {"name": "title", "value": "CONFIDENTIAL: Insider Threat - $node_parse_alert.username"},
+        {"name": "severity", "value": "3"},
+        {"name": "tlp", "value": "3"},
+        {"name": "tags", "value": "insider-threat,T1078,RESTRICTED"}
+      ],
+      "position": {"x": 100, "y": 550}
+    },
+    {
+      "id": "node_notify_security_lead",
+      "name": "Notify Security Lead Only",
+      "app_name": "Email",
+      "app_version": "1.0.0",
+      "action": "send_email",
+      "description": "Notify only the security lead - do NOT alert the general SOC or the user",
+      "parameters": [
+        {"name": "to", "value": "security.lead@company.com"},
+        {"name": "subject", "value": "CONFIDENTIAL: Insider threat alert requires review"},
+        {"name": "body", "value": "Risk score: $node_parse_alert.risk_score. User: $node_parse_alert.username. Case: $node_create_restricted_case.id. Please review before taking action."}
+      ],
+      "position": {"x": 100, "y": 700}
+    }
+  ],
+  "branches": [
+    {"id": "b1", "source_id": "trigger_ueba", "destination_id": "node_parse_alert"},
+    {"id": "b2", "source_id": "node_parse_alert", "destination_id": "node_collect_audit_logs"},
+    {"id": "b3", "source_id": "node_parse_alert", "destination_id": "node_get_ad_groups"},
+    {"id": "b4", "source_id": "node_collect_audit_logs", "destination_id": "node_enable_enhanced_logging"},
+    {"id": "b5", "source_id": "node_enable_enhanced_logging", "destination_id": "node_create_restricted_case"},
+    {"id": "b6", "source_id": "node_get_ad_groups", "destination_id": "node_create_restricted_case"},
+    {"id": "b7", "source_id": "node_create_restricted_case", "destination_id": "node_notify_security_lead"}
+  ]
+}

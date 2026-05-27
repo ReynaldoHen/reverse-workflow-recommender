@@ -1,0 +1,141 @@
+{
+  "id": "wf-account-takeover-response-v1",
+  "name": "Account Takeover and Compromised Identity Response",
+  "description": "Responds to account takeover indicators such as impossible travel, new device login, MFA bypass, or credential in breach data. Validates the anomaly, revokes active sessions, resets credentials, forces MFA re-enrolment, and guides the user through account recovery.",
+  "start": "node_parse_alert",
+  "sharing": "private",
+  "tags": ["account-takeover", "identity", "T1078", "T1539", "MFA", "impossible-travel"],
+  "triggers": [
+    {
+      "id": "trigger_identity_alert",
+      "name": "Identity Alert",
+      "app_name": "Webhook",
+      "trigger_type": "WEBHOOK",
+      "description": "Receives account takeover signal from Azure AD Identity Protection, Okta, or SIEM"
+    }
+  ],
+  "actions": [
+    {
+      "id": "node_parse_alert",
+      "name": "Parse Identity Alert",
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "action": "repeat_back_to_me",
+      "description": "Extract user, anomaly type (impossible travel/new device/breach), source IP, location",
+      "parameters": [{"name": "call", "value": "$exec"}],
+      "position": {"x": 100, "y": 100}
+    },
+    {
+      "id": "node_check_breach",
+      "name": "Check Breach Databases",
+      "app_name": "HaveIBeenPwned",
+      "app_version": "1.0.0",
+      "action": "check_account",
+      "description": "Check if the user email appears in known breach datasets",
+      "parameters": [
+        {"name": "account", "value": "$node_parse_alert.user_email"}
+      ],
+      "position": {"x": 100, "y": 250}
+    },
+    {
+      "id": "node_enrich_login_ip",
+      "name": "Enrich Login IP",
+      "app_name": "AbuseIPDB",
+      "app_version": "1.0.0",
+      "action": "check_ip",
+      "description": "Check the suspicious login IP for VPN/proxy/Tor exit node status",
+      "parameters": [
+        {"name": "ip_address", "value": "$node_parse_alert.source_ip"}
+      ],
+      "position": {"x": 350, "y": 250}
+    },
+    {
+      "id": "node_revoke_sessions",
+      "name": "Revoke All Sessions",
+      "app_name": "Azure AD",
+      "app_version": "1.0.0",
+      "action": "revoke_user_sessions",
+      "description": "Immediately revoke all active user sessions across all apps",
+      "parameters": [
+        {"name": "user_id", "value": "$node_parse_alert.user_email"}
+      ],
+      "position": {"x": 100, "y": 400}
+    },
+    {
+      "id": "node_reset_password",
+      "name": "Force Password Reset",
+      "app_name": "Active Directory",
+      "app_version": "1.0.0",
+      "action": "reset_password",
+      "description": "Force an immediate password reset on next login",
+      "parameters": [
+        {"name": "username", "value": "$node_parse_alert.username"},
+        {"name": "force_change_at_login", "value": "true"}
+      ],
+      "position": {"x": 350, "y": 400}
+    },
+    {
+      "id": "node_revoke_mfa",
+      "name": "Revoke MFA Devices",
+      "app_name": "Azure AD",
+      "app_version": "1.0.0",
+      "action": "delete_mfa_methods",
+      "description": "Remove all registered MFA methods to force re-enrolment with verified device",
+      "parameters": [
+        {"name": "user_id", "value": "$node_parse_alert.user_email"}
+      ],
+      "position": {"x": 100, "y": 550}
+    },
+    {
+      "id": "node_block_suspicious_ip",
+      "name": "Block Suspicious Login IP",
+      "app_name": "Azure AD",
+      "app_version": "1.0.0",
+      "action": "add_named_location_block",
+      "description": "Add the suspicious source IP to Azure AD conditional access block list",
+      "parameters": [
+        {"name": "ip", "value": "$node_parse_alert.source_ip"}
+      ],
+      "position": {"x": 350, "y": 550}
+    },
+    {
+      "id": "node_notify_user",
+      "name": "Notify User via Phone",
+      "app_name": "Twilio",
+      "app_version": "1.0.0",
+      "action": "send_sms",
+      "description": "Text the user on their registered phone number to alert them and guide recovery",
+      "parameters": [
+        {"name": "to", "value": "$node_parse_alert.user_phone"},
+        {"name": "body", "value": "SECURITY ALERT: Your company account showed suspicious activity. Your password has been reset and sessions revoked. Contact the SOC on +1-XXX-XXX-XXXX to recover access."}
+      ],
+      "position": {"x": 100, "y": 700}
+    },
+    {
+      "id": "node_create_case",
+      "name": "Create Account Takeover Case",
+      "app_name": "TheHive",
+      "app_version": "1.0.0",
+      "action": "create_case",
+      "description": "Document account takeover attempt with all evidence for IR review",
+      "parameters": [
+        {"name": "title", "value": "Account Takeover: $node_parse_alert.user_email"},
+        {"name": "severity", "value": "3"},
+        {"name": "tags", "value": "account-takeover,identity,T1078"}
+      ],
+      "position": {"x": 350, "y": 700}
+    }
+  ],
+  "branches": [
+    {"id": "b1", "source_id": "trigger_identity_alert", "destination_id": "node_parse_alert"},
+    {"id": "b2", "source_id": "node_parse_alert", "destination_id": "node_check_breach"},
+    {"id": "b3", "source_id": "node_parse_alert", "destination_id": "node_enrich_login_ip"},
+    {"id": "b4", "source_id": "node_check_breach", "destination_id": "node_revoke_sessions"},
+    {"id": "b5", "source_id": "node_enrich_login_ip", "destination_id": "node_reset_password"},
+    {"id": "b6", "source_id": "node_revoke_sessions", "destination_id": "node_revoke_mfa"},
+    {"id": "b7", "source_id": "node_reset_password", "destination_id": "node_block_suspicious_ip"},
+    {"id": "b8", "source_id": "node_revoke_mfa", "destination_id": "node_notify_user"},
+    {"id": "b9", "source_id": "node_revoke_mfa", "destination_id": "node_create_case"},
+    {"id": "b10", "source_id": "node_block_suspicious_ip", "destination_id": "node_create_case"}
+  ]
+}

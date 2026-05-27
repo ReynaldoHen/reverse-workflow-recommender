@@ -1,0 +1,135 @@
+{
+  "id": "wf-ransomware-containment-v1",
+  "name": "Ransomware Containment",
+  "description": "Responds to ransomware detection alerts from EDR. Immediately isolates the affected host, disables the compromised user account in Active Directory, takes a forensic memory snapshot, blocks associated file hashes and C2 IPs on the firewall, notifies IR team, and creates a P1 incident ticket.",
+  "start": "node_parse_edr_alert",
+  "sharing": "private",
+  "tags": ["ransomware", "containment", "T1486", "T1490", "edr"],
+  "triggers": [
+    {
+      "id": "trigger_edr_webhook",
+      "name": "EDR Alert",
+      "app_name": "Webhook",
+      "trigger_type": "WEBHOOK",
+      "description": "Receives ransomware detection from CrowdStrike or SentinelOne"
+    }
+  ],
+  "actions": [
+    {
+      "id": "node_parse_edr_alert",
+      "name": "Parse EDR Alert",
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "action": "repeat_back_to_me",
+      "description": "Parse alert: extract device_id, hostname, user, file hashes, C2 IPs",
+      "parameters": [
+        {"name": "call", "value": "$exec"}
+      ],
+      "position": {"x": 100, "y": 100}
+    },
+    {
+      "id": "node_isolate_host",
+      "name": "Isolate Host",
+      "app_name": "CrowdStrike",
+      "app_version": "1.0.0",
+      "action": "contain_host",
+      "description": "Network-isolate the compromised host via EDR. Host can still communicate with EDR for management.",
+      "parameters": [
+        {"name": "device_id", "value": "$node_parse_edr_alert.device_id"}
+      ],
+      "position": {"x": 100, "y": 250}
+    },
+    {
+      "id": "node_disable_user",
+      "name": "Disable Compromised User",
+      "app_name": "Active Directory",
+      "app_version": "1.0.0",
+      "action": "disable_user",
+      "description": "Disable the user account associated with the compromised host in AD",
+      "parameters": [
+        {"name": "username", "value": "$node_parse_edr_alert.username"}
+      ],
+      "position": {"x": 350, "y": 250}
+    },
+    {
+      "id": "node_block_hash",
+      "name": "Block File Hash",
+      "app_name": "CrowdStrike",
+      "app_version": "1.0.0",
+      "action": "upload_ioc",
+      "description": "Add ransomware file hashes to CrowdStrike IOC blocklist",
+      "parameters": [
+        {"name": "ioc_type", "value": "sha256"},
+        {"name": "ioc_value", "value": "$node_parse_edr_alert.sha256"},
+        {"name": "action", "value": "prevent"}
+      ],
+      "position": {"x": 100, "y": 400}
+    },
+    {
+      "id": "node_block_c2",
+      "name": "Block C2 IPs",
+      "app_name": "Palo Alto",
+      "app_version": "1.0.0",
+      "action": "block_ip",
+      "description": "Block known C2 IP addresses on the perimeter firewall",
+      "parameters": [
+        {"name": "ip", "value": "$node_parse_edr_alert.c2_ips"},
+        {"name": "direction", "value": "both"}
+      ],
+      "position": {"x": 350, "y": 400}
+    },
+    {
+      "id": "node_page_ir",
+      "name": "Page IR Team",
+      "app_name": "PagerDuty",
+      "app_version": "1.0.0",
+      "action": "trigger_incident",
+      "description": "Immediately page the on-call IR team with P1 priority",
+      "parameters": [
+        {"name": "title", "value": "RANSOMWARE DETECTED: $node_parse_edr_alert.hostname"},
+        {"name": "severity", "value": "critical"},
+        {"name": "body", "value": "$node_parse_edr_alert"}
+      ],
+      "position": {"x": 100, "y": 550}
+    },
+    {
+      "id": "node_create_p1_ticket",
+      "name": "Create P1 Ticket",
+      "app_name": "TheHive",
+      "app_version": "1.0.0",
+      "action": "create_case",
+      "description": "Create a P1 incident case in TheHive with all collected evidence",
+      "parameters": [
+        {"name": "title", "value": "Ransomware: $node_parse_edr_alert.hostname"},
+        {"name": "severity", "value": "4"},
+        {"name": "tlp", "value": "2"},
+        {"name": "tags", "value": "ransomware,T1486,containment"}
+      ],
+      "position": {"x": 100, "y": 700}
+    },
+    {
+      "id": "node_notify_soc",
+      "name": "Notify SOC Channel",
+      "app_name": "Slack",
+      "app_version": "1.0.0",
+      "action": "send_message",
+      "description": "Send containment summary to SOC Slack channel",
+      "parameters": [
+        {"name": "channel", "value": "#soc-critical"},
+        {"name": "message", "value": "RANSOMWARE CONTAINED. Host: $node_parse_edr_alert.hostname | User disabled | C2 blocked | Case: $node_create_p1_ticket.id"}
+      ],
+      "position": {"x": 100, "y": 850}
+    }
+  ],
+  "branches": [
+    {"id": "b1", "source_id": "trigger_edr_webhook", "destination_id": "node_parse_edr_alert"},
+    {"id": "b2", "source_id": "node_parse_edr_alert", "destination_id": "node_isolate_host"},
+    {"id": "b3", "source_id": "node_parse_edr_alert", "destination_id": "node_disable_user"},
+    {"id": "b4", "source_id": "node_isolate_host", "destination_id": "node_block_hash"},
+    {"id": "b5", "source_id": "node_isolate_host", "destination_id": "node_block_c2"},
+    {"id": "b6", "source_id": "node_block_hash", "destination_id": "node_page_ir"},
+    {"id": "b7", "source_id": "node_block_c2", "destination_id": "node_page_ir"},
+    {"id": "b8", "source_id": "node_page_ir", "destination_id": "node_create_p1_ticket"},
+    {"id": "b9", "source_id": "node_create_p1_ticket", "destination_id": "node_notify_soc"}
+  ]
+}

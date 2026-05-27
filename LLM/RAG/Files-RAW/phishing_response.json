@@ -1,0 +1,117 @@
+{
+  "id": "wf-phishing-response-v1",
+  "name": "Phishing Response",
+  "description": "Triages reported phishing emails. Extracts URLs and attachments, detonates in sandbox, blocks malicious sender domain on email gateway, disables compromised user if credentials were harvested, creates incident ticket, and notifies the user and SOC.",
+  "start": "node_get_alert",
+  "sharing": "private",
+  "tags": ["phishing", "email", "T1566"],
+  "triggers": [
+    {
+      "id": "trigger_webhook",
+      "name": "Alert Intake",
+      "app_name": "Webhook",
+      "trigger_type": "WEBHOOK",
+      "description": "Receives phishing alerts from SIEM or email security gateway"
+    }
+  ],
+  "actions": [
+    {
+      "id": "node_get_alert",
+      "name": "Parse Alert",
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "action": "repeat_back_to_me",
+      "description": "Parse incoming alert and extract sender, subject, URLs, attachments",
+      "parameters": [
+        {"name": "call", "value": "$exec"}
+      ],
+      "position": {"x": 100, "y": 100}
+    },
+    {
+      "id": "node_extract_iocs",
+      "name": "Extract IOCs",
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "action": "parse_ioc",
+      "description": "Extract URLs, IPs, and hashes from the email body and headers",
+      "parameters": [
+        {"name": "input_data", "value": "$node_get_alert.#text"}
+      ],
+      "position": {"x": 100, "y": 250}
+    },
+    {
+      "id": "node_detonate_url",
+      "name": "Detonate URL",
+      "app_name": "URLScan.io",
+      "app_version": "1.0.0",
+      "action": "search_url",
+      "description": "Submit suspicious URLs to URLScan.io sandbox for analysis",
+      "parameters": [
+        {"name": "url", "value": "$node_extract_iocs.urls"}
+      ],
+      "position": {"x": 100, "y": 400}
+    },
+    {
+      "id": "node_check_sender",
+      "name": "Check Sender Domain",
+      "app_name": "VirusTotal",
+      "app_version": "2.0.0",
+      "action": "get_domain_report",
+      "description": "Check sender domain reputation on VirusTotal",
+      "parameters": [
+        {"name": "domain", "value": "$node_get_alert.sender_domain"}
+      ],
+      "position": {"x": 350, "y": 400}
+    },
+    {
+      "id": "node_block_sender",
+      "name": "Block Sender Domain",
+      "app_name": "Microsoft Exchange",
+      "app_version": "1.0.0",
+      "action": "block_sender",
+      "description": "Block the malicious sender domain on the email gateway",
+      "parameters": [
+        {"name": "domain", "value": "$node_get_alert.sender_domain"}
+      ],
+      "position": {"x": 100, "y": 550}
+    },
+    {
+      "id": "node_create_ticket",
+      "name": "Create Incident Ticket",
+      "app_name": "TheHive",
+      "app_version": "1.0.0",
+      "action": "create_alert",
+      "description": "Create a case in TheHive for analyst follow-up",
+      "parameters": [
+        {"name": "title", "value": "Phishing: $node_get_alert.subject"},
+        {"name": "description", "value": "$node_get_alert"},
+        {"name": "severity", "value": "2"},
+        {"name": "tags", "value": "phishing,T1566"}
+      ],
+      "position": {"x": 100, "y": 700}
+    },
+    {
+      "id": "node_notify_user",
+      "name": "Notify Affected User",
+      "app_name": "Slack",
+      "app_version": "1.0.0",
+      "action": "send_message",
+      "description": "Notify the affected user and the SOC channel",
+      "parameters": [
+        {"name": "channel", "value": "#soc-alerts"},
+        {"name": "message", "value": "Phishing alert processed. Sender blocked. Ticket: $node_create_ticket.id"}
+      ],
+      "position": {"x": 100, "y": 850}
+    }
+  ],
+  "branches": [
+    {"id": "b1", "source_id": "trigger_webhook", "destination_id": "node_get_alert"},
+    {"id": "b2", "source_id": "node_get_alert", "destination_id": "node_extract_iocs"},
+    {"id": "b3", "source_id": "node_extract_iocs", "destination_id": "node_detonate_url"},
+    {"id": "b4", "source_id": "node_extract_iocs", "destination_id": "node_check_sender"},
+    {"id": "b5", "source_id": "node_detonate_url", "destination_id": "node_block_sender"},
+    {"id": "b6", "source_id": "node_check_sender", "destination_id": "node_block_sender"},
+    {"id": "b7", "source_id": "node_block_sender", "destination_id": "node_create_ticket"},
+    {"id": "b8", "source_id": "node_create_ticket", "destination_id": "node_notify_user"}
+  ]
+}
