@@ -30,6 +30,5 @@ shuffle-database/performance_analyzer_enabled.conf
 shuffle-database/rca_enabled.conf
 
 .env
-reverse-workflow-service/.env
 
 #*/package-lock.json

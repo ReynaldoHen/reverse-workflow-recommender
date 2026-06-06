@@ -40,10 +40,13 @@ const saveGraphToNeo4j = async (graphData) => {
       WHERE b.id = $target
 
       MERGE (a)-[r:${relationshipType}]->(b)
+
+      SET r += $properties
       `,
       {
         source: rel.source,
         target: rel.target,
+        properties: rel.properties || {},
       }
     )
     }

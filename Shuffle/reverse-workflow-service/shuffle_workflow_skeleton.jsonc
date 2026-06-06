@@ -1,0 +1,70 @@
+{
+  "name": "",
+  // Nama workflow
+  // Contoh: "Security Threat Investigation and Response"
+
+  "description": "",
+  // Deskripsi singkat tujuan workflow
+  // Contoh: "Automated workflow for domain reputation check and incident notification"
+
+  "actions": [
+    {
+      "app_name": "",
+      // Nama aplikasi
+      // Contoh: "Virustotal_v3"
+
+      "app_version": "",
+      // Versi aplikasi
+      // Contoh: "1.1.0"
+
+      "app_id": "",
+      // ID aplikasi yang valid dari Application Knowledge
+      // Contoh: "a86a53b9a463ceace67bb62eb2a9dab4"
+
+      "id": "",
+      // ID unik action/node (UUID)
+      // Contoh: "4a183af7-7cf2-4ce9-a008-a931c7cf4ff6"
+
+      "is_start_node": false,
+      // Boolean — hanya SATU node boleh bernilai true (node pertama/trigger)
+
+      "label": "",
+      // Nama node yang tampil di canvas Shuffle
+      // Gunakan nama bermakna
+      // Contoh: "Check_Domain_Reputation"
+
+      "large_image": "",
+      // Logo aplikasi (base64 PNG/SVG) dari Application Knowledge
+      // Contoh: "data:image/png;base64,iVBORw0KGgo..."
+
+      "name": "",
+      // Nama action yang valid dari Application Knowledge
+      // Contoh: "get_comments_on_a_domain"
+
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      // Posisi node pada canvas Shuffle
+      // Susun kiri ke kanan agar workflow mudah dibaca
+      // Contoh Node 1: x=200, Node 2: x=700, Node 3: x=1200
+
+      "execution_delay": 0
+      // Delay eksekusi dalam detik
+      // Default: 0 (kecuali ada alasan logis untuk delay)
+    }
+  ],
+
+  "branches": [
+    {
+      "destination_id": "",
+      // Mengacu ke actions.id node TUJUAN
+
+      "id": "",
+      // ID unik branch (UUID)
+
+      "source_id": ""
+      // Mengacu ke actions.id node SUMBER
+    }
+  ]
+}

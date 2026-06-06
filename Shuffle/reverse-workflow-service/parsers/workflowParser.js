@@ -10,6 +10,11 @@ const parseWorkflow = (actions, branches) => {
       action_name: action.name,
       category: action.category,
       position: action.position,
+      app_id: action.app_id,
+      app_version: action.app_version,
+      isStartNode: action.isStartNode,
+      environment: action.environment,
+      parameters: action.parameters,
     }
   })
 
