@@ -1,0 +1,133 @@
+version: "3.9"
+
+services:
+  api:
+    build: ./api
+    container_name: playbook-api
+    ports:
+      - "8000:8000"
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      ollama:
+        condition: service_started
+    volumes:
+      - model_cache:/root/.cache
+    restart: unless-stopped
+    networks:
+      - internal
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: playbook-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pbuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pbpass}
+      POSTGRES_DB: ${POSTGRES_DB:-playbooks}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pbuser}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - internal
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: playbook-qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+    networks:
+      - internal
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: playbook-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    networks:
+      - internal
+    # GPU support (uncomment if available):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  shuffle_app:
+    build: ./shuffle_app
+    container_name: playbook-shuffle-app
+    ports:
+      - "5001:5001"
+    env_file: .env
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - internal
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: playbook-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    restart: unless-stopped
+    networks:
+      - internal
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: playbook-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - internal
+
+  ui:
+    image: nginx:alpine
+    container_name: playbook-ui
+    ports:
+      - "8080:80"
+    volumes:
+      - ./ui:/usr/share/nginx/html:ro
+    restart: unless-stopped
+    networks:
+      - internal
+
+volumes:
+  postgres_data:
+  qdrant_data:
+  ollama_data:
+  model_cache:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  internal:
+    driver: bridge
