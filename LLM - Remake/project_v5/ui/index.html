@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI Playbook Recommender — Shuffle SOAR</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f4f6f9; --surface: #ffffff; --border: #e2e8f0;
+    --text: #1a202c; --muted: #718096; --accent: #2563eb;
+    --accent-dark: #1d4ed8; --accent-bg: #eff6ff;
+    --green: #059669; --green-bg: #ecfdf5;
+    --amber: #d97706; --amber-bg: #fffbeb;
+    --red: #dc2626; --red-bg: #fef2f2;
+    --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+    --radius: 8px; --radius-lg: 12px;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh; }
+
+  /* ── Layout ── */
+  .header { background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 0 2rem; display: flex; align-items: center; justify-content: space-between;
+    height: 60px; position: sticky; top: 0; z-index: 100; }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 16px; color: var(--text); }
+  .logo-icon { width: 32px; height: 32px; background: var(--accent); border-radius: 8px;
+    display: flex; align-items: center; justify-content: center; color: #fff; font-size: 16px; }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .badge { background: var(--accent-bg); color: var(--accent); font-size: 11px;
+    font-weight: 600; padding: 3px 8px; border-radius: 4px; }
+  .main { max-width: 1000px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+  /* ── Auth panel ── */
+  #auth-panel { background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 2rem; max-width: 400px; margin: 4rem auto;
+    box-shadow: var(--shadow); }
+  #auth-panel h2 { font-size: 20px; margin-bottom: .5rem; }
+  #auth-panel p { color: var(--muted); font-size: 14px; margin-bottom: 1.5rem; }
+  .input-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 1rem; }
+  .input-row label { font-size: 13px; font-weight: 500; }
+  input[type=text], input[type=password], textarea, select {
+    width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius);
+    font-size: 14px; background: var(--surface); color: var(--text);
+    transition: border-color .15s; outline: none; }
+  input:focus, textarea:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
+
+  /* ── Buttons ── */
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
+    border-radius: var(--radius); font-size: 14px; font-weight: 500; cursor: pointer;
+    border: 1px solid transparent; transition: all .15s; }
+  .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-primary:hover { background: var(--accent-dark); }
+  .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-secondary { background: var(--surface); color: var(--text); border-color: var(--border); }
+  .btn-secondary:hover { background: var(--bg); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+  .btn-ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  .btn-ghost:hover { color: var(--text); background: var(--bg); }
+
+  /* ── Search box ── */
+  .search-card { background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 1.5rem; box-shadow: var(--shadow); margin-bottom: 1.5rem; }
+  .search-card h2 { font-size: 14px; font-weight: 600; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .05em; margin-bottom: 1rem; }
+  .query-area { width: 100%; border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px; font-size: 15px; resize: vertical; min-height: 80px;
+    font-family: inherit; color: var(--text); background: var(--surface); }
+  .query-area:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,.1); outline: none; }
+  .search-controls { display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+  .toggle-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted);
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+  .toggle-row:hover { border-color: var(--accent); color: var(--accent); }
+  .toggle-row.active { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
+  .toggle-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .toggle-row.active .toggle-dot { background: var(--accent); }
+  .context-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .context-row label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 3px; }
+  .context-row input { font-size: 13px; padding: 6px 10px; }
+
+  /* ── Results ── */
+  .results-header { display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1rem; }
+  .results-header h3 { font-size: 16px; font-weight: 600; }
+  .intent-badge { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 4px;
+    background: var(--accent-bg); color: var(--accent); }
+  .result-card { background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 1.25rem; margin-bottom: 1rem;
+    box-shadow: var(--shadow); }
+  .result-card.top { border-left: 3px solid var(--accent); }
+  .result-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 8px; }
+  .result-name { font-size: 15px; font-weight: 600; color: var(--text); }
+  .confidence { display: flex; align-items: center; gap: 6px; }
+  .confidence-num { font-size: 13px; font-weight: 700; }
+  .conf-high { color: var(--green); }
+  .conf-med  { color: var(--amber); }
+  .conf-low  { color: var(--red); }
+  .confidence-bar { width: 60px; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .confidence-fill { height: 100%; border-radius: 2px; }
+  .fill-high { background: var(--green); }
+  .fill-med  { background: var(--amber); }
+  .fill-low  { background: var(--red); }
+  .result-category { font-size: 11px; font-weight: 600; background: var(--bg); color: var(--muted);
+    padding: 2px 7px; border-radius: 4px; display: inline-block; margin-bottom: 8px; }
+  .result-desc { font-size: 13px; color: var(--muted); margin-bottom: 10px; line-height: 1.5; }
+  .result-reasoning { background: var(--accent-bg); border-radius: 6px; padding: 8px 12px;
+    font-size: 13px; color: var(--accent); margin-bottom: 10px; }
+  .tags-row { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+  .tag { font-size: 11px; background: var(--bg); color: var(--muted); padding: 2px 7px;
+    border-radius: 4px; border: 1px solid var(--border); }
+  .verification { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px; }
+  .verification h4 { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 8px;
+    text-transform: uppercase; letter-spacing: .04em; }
+  .ver-row { display: flex; align-items: center; gap: 6px; font-size: 12px; margin-bottom: 4px; }
+  .icon-ok { color: var(--green); } .icon-warn { color: var(--amber); } .icon-bad { color: var(--red); }
+  .result-footer { display: flex; align-items: center; justify-content: space-between;
+    margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .modifications { font-size: 12px; color: var(--muted); }
+  .modifications strong { color: var(--amber); }
+  .feedback-btns { display: flex; gap: 6px; }
+
+  /* ── Fallback / empty ── */
+  .fallback { background: var(--amber-bg); border: 1px solid #fcd34d; border-radius: var(--radius);
+    padding: 1rem; font-size: 14px; color: #92400e; margin-bottom: 1rem; }
+  .empty-state { text-align: center; padding: 3rem; color: var(--muted); }
+  .empty-state .big-icon { font-size: 48px; margin-bottom: 1rem; }
+
+  /* ── Stats bar ── */
+  .stats-bar { display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .stat-chip { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 8px 14px; font-size: 13px; }
+  .stat-chip span { font-weight: 600; color: var(--accent); }
+
+  /* ── Loading ── */
+  .loading { display: flex; align-items: center; gap: 12px; padding: 2rem; color: var(--muted); }
+  .spinner { width: 20px; height: 20px; border: 2px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Notification ── */
+  .notif { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--text);
+    color: #fff; font-size: 13px; padding: 10px 16px; border-radius: var(--radius);
+    box-shadow: var(--shadow); z-index: 999; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .notif.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="logo">
+    <div class="logo-icon">🔍</div>
+    AI Playbook Recommender
+  </div>
+  <div class="header-right">
+    <span class="badge" id="status-badge">Connecting…</span>
+    <button class="btn btn-ghost btn-sm" onclick="logout()" id="logout-btn" style="display:none">Sign out</button>
+  </div>
+</header>
+
+<div id="auth-panel" style="display:none">
+  <h2>Sign in</h2>
+  <p>Use your SOC account or the admin API key to access the recommender.</p>
+  <div class="input-row">
+    <label>Username</label>
+    <input type="text" id="login-user" value="admin" />
+  </div>
+  <div class="input-row">
+    <label>Password</label>
+    <input type="password" id="login-pass" value="admin" />
+  </div>
+  <div class="input-row">
+    <label>— or use API key directly —</label>
+    <input type="text" id="login-apikey" placeholder="Paste API key (from startup logs)" />
+  </div>
+  <div id="login-error" style="color:var(--red);font-size:13px;margin-bottom:.75rem;display:none"></div>
+  <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Sign in</button>
+</div>
+
+<div id="app" style="display:none">
+  <main class="main">
+
+    <!-- Stats bar -->
+    <div class="stats-bar" id="stats-bar">
+      <div class="stat-chip">Playbooks: <span id="stat-count">—</span></div>
+      <div class="stat-chip">Categories: <span id="stat-cats">—</span></div>
+      <div class="stat-chip">Last query: <span id="stat-intent">—</span></div>
+      <div class="stat-chip">Latency: <span id="stat-latency">—</span></div>
+    </div>
+
+    <!-- Search card -->
+    <div class="search-card">
+      <h2>Ask the AI</h2>
+      <textarea class="query-area" id="query-input"
+        placeholder="Describe what you need, e.g: 'I need to investigate a phishing email with Microsoft Sentinel and Slack'"
+      ></textarea>
+
+      <div class="search-controls">
+        <button class="btn btn-primary" onclick="doRecommend()" id="recommend-btn">
+          Get Recommendations ↗
+        </button>
+        <div class="toggle-row" id="refinement-toggle" onclick="toggleRefinement()">
+          <div class="toggle-dot"></div>
+          Semi-Agentic Refinement
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="clearResults()">Clear</button>
+      </div>
+
+      <div class="context-row" id="context-inputs" style="display:none">
+        <div>
+          <label>Available integrations (comma-separated)</label>
+          <input type="text" id="ctx-integrations" placeholder="VirusTotal, Sentinel, Slack…" />
+        </div>
+        <div>
+          <label>API keys configured</label>
+          <input type="text" id="ctx-apikeys" placeholder="VirusTotal, Slack…" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Results area -->
+    <div id="results-area"></div>
+
+  </main>
+</div>
+
+<div class="notif" id="notif"></div>
+
+<script>
+const API = 'http://localhost:8000';
+let token = localStorage.getItem('pb_token') || '';
+let apiKey = localStorage.getItem('pb_apikey') || '';
+let useRefinement = false;
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+window.onload = async () => {
+  if (token || apiKey) {
+    const ok = await checkAuth();
+    if (ok) { showApp(); return; }
+  }
+  showAuthPanel();
+};
+
+function authHeaders() {
+  if (token) return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+  if (apiKey) return { 'X-API-Key': apiKey, 'Content-Type': 'application/json' };
+  return { 'Content-Type': 'application/json' };
+}
+
+async function checkAuth() {
+  try {
+    const r = await fetch(`${API}/health`);
+    return r.ok;
+  } catch { return false; }
+}
+
+async function doLogin() {
+  const user = document.getElementById('login-user').value;
+  const pass = document.getElementById('login-pass').value;
+  const key  = document.getElementById('login-apikey').value.trim();
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+
+  if (key) {
+    apiKey = key; token = '';
+    localStorage.setItem('pb_apikey', key);
+    localStorage.removeItem('pb_token');
+    showApp();
+    return;
+  }
+
+  try {
+    const r = await fetch(`${API}/api/v1/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: user, password: pass }),
+    });
+    if (!r.ok) throw new Error('Invalid credentials');
+    const data = await r.json();
+    token = data.access_token; apiKey = '';
+    localStorage.setItem('pb_token', token);
+    localStorage.removeItem('pb_apikey');
+    showApp();
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+  }
+}
+
+function logout() {
+  token = ''; apiKey = '';
+  localStorage.removeItem('pb_token');
+  localStorage.removeItem('pb_apikey');
+  showAuthPanel();
+}
+
+function showApp() {
+  document.getElementById('auth-panel').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('logout-btn').style.display = 'block';
+  pollStatus();
+  loadStats();
+}
+
+function showAuthPanel() {
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('auth-panel').style.display = 'block';
+  document.getElementById('logout-btn').style.display = 'none';
+}
+
+// ── Status poll ───────────────────────────────────────────────────────────────
+async function pollStatus() {
+  try {
+    const r = await fetch(`${API}/health`);
+    const d = await r.json();
+    const badge = document.getElementById('status-badge');
+    badge.textContent = d.status === 'ok' ? '● Online' : '⚠ Degraded';
+    badge.style.background = d.status === 'ok' ? 'var(--green-bg)' : 'var(--amber-bg)';
+    badge.style.color = d.status === 'ok' ? 'var(--green)' : 'var(--amber)';
+  } catch {
+    const badge = document.getElementById('status-badge');
+    badge.textContent = '✕ Offline'; badge.style.background = 'var(--red-bg)'; badge.style.color = 'var(--red)';
+  }
+  setTimeout(pollStatus, 15000);
+}
+
+async function loadStats() {
+  try {
+    const r = await fetch(`${API}/api/v1/playbooks?limit=500`, { headers: authHeaders() });
+    if (!r.ok) return;
+    const data = await r.json();
+    document.getElementById('stat-count').textContent = data.length;
+    const cats = new Set(data.map(p => p.category).filter(Boolean));
+    document.getElementById('stat-cats').textContent = cats.size;
+  } catch {}
+}
+
+// ── Refinement toggle ─────────────────────────────────────────────────────────
+function toggleRefinement() {
+  useRefinement = !useRefinement;
+  const toggle = document.getElementById('refinement-toggle');
+  const ctx = document.getElementById('context-inputs');
+  toggle.classList.toggle('active', useRefinement);
+  ctx.style.display = useRefinement ? 'grid' : 'none';
+}
+
+// ── Recommend ─────────────────────────────────────────────────────────────────
+async function doRecommend() {
+  const query = document.getElementById('query-input').value.trim();
+  if (!query) { showNotif('Please enter a query'); return; }
+
+  const btn = document.getElementById('recommend-btn');
+  btn.disabled = true; btn.textContent = 'Thinking…';
+  setResults('<div class="loading"><div class="spinner"></div>Searching playbook knowledge base…</div>');
+
+  const body = {
+    query,
+    top_k: 3,
+    use_refinement: useRefinement,
+  };
+
+  if (useRefinement) {
+    const intg = document.getElementById('ctx-integrations').value.trim();
+    const keys = document.getElementById('ctx-apikeys').value.trim();
+    body.analyst_context = {
+      available_integrations: intg ? intg.split(',').map(s => s.trim()).filter(Boolean) : [],
+      api_keys_configured: keys ? keys.split(',').map(s => s.trim()).filter(Boolean) : [],
+    };
+  }
+
+  try {
+    const r = await fetch(`${API}/api/v1/recommend`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(body),
+    });
+
+    if (!r.ok) {
+      const e = await r.json();
+      throw new Error(e.detail || `HTTP ${r.status}`);
+    }
+
+    const data = await r.json();
+    renderResults(data);
+    document.getElementById('stat-intent').textContent = data.intent || '—';
+    document.getElementById('stat-latency').textContent = `${data.latency_ms}ms`;
+  } catch (e) {
+    setResults(`<div class="fallback">Error: ${e.message}</div>`);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Get Recommendations ↗';
+  }
+}
+
+// ── Render results ────────────────────────────────────────────────────────────
+function renderResults(data) {
+  const pbs = data.recommended_playbooks || [];
+
+  if (!pbs.length) {
+    setResults(`
+      ${data.fallback_message ? `<div class="fallback">${data.fallback_message}</div>` : ''}
+      <div class="empty-state">
+        <div class="big-icon">🔍</div>
+        <p>No playbooks found matching your query.</p>
+        <p style="font-size:13px;margin-top:.5rem">Try rephrasing or adding more integrations to the knowledge base.</p>
+      </div>
+    `);
+    return;
+  }
+
+  let html = `
+    <div class="results-header">
+      <h3>${pbs.length} recommendation${pbs.length > 1 ? 's' : ''} for: <em>"${escHtml(data.query)}"</em></h3>
+      <span class="intent-badge">${data.intent}</span>
+    </div>
+  `;
+
+  if (data.fallback_message) {
+    html += `<div class="fallback">${data.fallback_message}</div>`;
+  }
+
+  pbs.forEach((pb, idx) => {
+    const conf = pb.confidence_score;
+    const confClass = conf >= 0.7 ? 'conf-high' : conf >= 0.5 ? 'conf-med' : 'conf-low';
+    const fillClass = conf >= 0.7 ? 'fill-high' : conf >= 0.5 ? 'fill-med' : 'fill-low';
+    const pct = Math.round(conf * 100);
+
+    const verHtml = pb.agent_verification ? renderVerification(pb.agent_verification) : '';
+    const modsHtml = pb.modifications?.length
+      ? `<div class="modifications"><strong>Setup required:</strong> ${pb.modifications.slice(0,2).map(escHtml).join(' · ')}</div>`
+      : '';
+
+    const intgTags = pb.integrations.map(i => `<span class="tag">${escHtml(i)}</span>`).join('');
+
+    html += `
+      <div class="result-card ${idx === 0 ? 'top' : ''}">
+        <div class="result-top">
+          <div>
+            <div class="result-name">${idx === 0 ? '⭐ ' : ''}${escHtml(pb.name)}</div>
+            <div class="result-category">${escHtml(pb.category)}</div>
+          </div>
+          <div class="confidence">
+            <div class="confidence-bar"><div class="confidence-fill ${fillClass}" style="width:${pct}%"></div></div>
+            <span class="confidence-num ${confClass}">${pct}%</span>
+          </div>
+        </div>
+
+        <p class="result-desc">${escHtml(pb.description)}</p>
+        ${pb.reasoning ? `<div class="result-reasoning">💡 ${escHtml(pb.reasoning)}</div>` : ''}
+        <div class="tags-row">${intgTags}</div>
+        ${verHtml}
+
+        <div class="result-footer">
+          ${modsHtml}
+          <div class="feedback-btns">
+            <button class="btn btn-secondary btn-sm" onclick="sendFeedback('${pb.id}','${escHtml(data.query)}',${conf},true)">
+              👍 Useful
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="sendFeedback('${pb.id}','${escHtml(data.query)}',${conf},false)">
+              👎 Not helpful
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  });
+
+  if (data.used_refinement) {
+    html += `<p style="font-size:12px;color:var(--muted);text-align:center;margin-top:8px">
+      ✓ Semi-agentic verification applied · ${data.latency_ms}ms total
+    </p>`;
+  }
+
+  setResults(html);
+}
+
+function renderVerification(v) {
+  const compat = v.compatible ? `<span class="icon-ok">✓</span> All integrations compatible`
+    : `<span class="icon-warn">⚠</span> Missing: ${v.missing_integrations.join(', ')}`;
+  const custom = v.customization_required ? `<span class="icon-warn">⚠</span> Customisation required` : `<span class="icon-ok">✓</span> No customisation needed`;
+  const gaps = v.config_gaps?.length ? `<span class="icon-bad">✗</span> ${v.config_gaps.length} config gap${v.config_gaps.length > 1 ? 's' : ''}` : `<span class="icon-ok">✓</span> No config gaps`;
+  return `
+    <div class="verification">
+      <h4>Agent Verification</h4>
+      <div class="ver-row">${compat}</div>
+      <div class="ver-row">${custom}</div>
+      <div class="ver-row">${gaps}</div>
+    </div>
+  `;
+}
+
+// ── Feedback ──────────────────────────────────────────────────────────────────
+async function sendFeedback(playbookId, query, score, accepted) {
+  try {
+    await fetch(`${API}/api/v1/feedback`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ query, recommended_playbook_id: playbookId, confidence_score: score, accepted }),
+    });
+    showNotif(accepted ? 'Thanks! Marked as useful.' : 'Feedback recorded.');
+  } catch { showNotif('Could not submit feedback.'); }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function setResults(html) {
+  document.getElementById('results-area').innerHTML = html;
+}
+
+function clearResults() {
+  setResults('');
+  document.getElementById('query-input').value = '';
+  document.getElementById('stat-intent').textContent = '—';
+  document.getElementById('stat-latency').textContent = '—';
+}
+
+function showNotif(msg) {
+  const el = document.getElementById('notif');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Keyboard shortcut: Ctrl/Cmd+Enter to submit
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') doRecommend();
+});
+</script>
+</body>
+</html>
