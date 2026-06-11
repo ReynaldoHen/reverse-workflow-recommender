@@ -1,0 +1,128 @@
+app_version: v1.0.0
+name: AI Playbook Recommender
+description: AI-powered Shuffle SOAR playbook recommendation using Hybrid RAG + Semi-Agentic Refinement
+contact_info:
+  name: SOC Automation Team
+  url: http://localhost:8000/docs
+tags:
+  - automation
+  - AI
+  - SOAR
+categories:
+  - SOAR
+  - Recommendation
+
+authentication:
+  required: true
+  parameters:
+    - name: api_key
+      description: API key for the recommender service
+      example: "abc123..."
+      multiline: false
+      required: true
+      in: header
+      schema:
+        type: apiKey
+
+actions:
+  - name: recommend_playbook
+    description: Get AI-powered playbook recommendations for a security task
+    parameters:
+      - name: query
+        description: Natural language description of the security task or incident (e.g. "I need to triage a phishing email with Sentinel")
+        multiline: true
+        required: true
+        example: "Automated phishing email investigation"
+        schema:
+          type: string
+      - name: session_id
+        description: Session ID for multi-turn conversations (optional)
+        required: false
+        schema:
+          type: string
+      - name: use_refinement
+        description: Enable semi-agentic verification to check integration compatibility (adds ~3 seconds)
+        required: false
+        schema:
+          type: boolean
+      - name: available_integrations
+        description: Comma-separated list of integrations in your Shuffle environment (e.g. "VirusTotal,Sentinel,Slack")
+        required: false
+        example: "VirusTotal,Microsoft Sentinel,Slack,Jira"
+        schema:
+          type: string
+      - name: api_keys_configured
+        description: Comma-separated list of integrations with API keys already configured
+        required: false
+        schema:
+          type: string
+      - name: top_k
+        description: Number of recommendations to return (1-10, default 3)
+        required: false
+        schema:
+          type: integer
+
+  - name: search_playbooks
+    description: Fast search across playbook knowledge base without LLM generation
+    parameters:
+      - name: query
+        description: Search query
+        required: true
+        schema:
+          type: string
+      - name: category
+        description: Filter by category (Phishing, Malware, Ransomware, Cloud Security, etc.)
+        required: false
+        schema:
+          type: string
+      - name: integrations
+        description: Filter by integrations (comma-separated)
+        required: false
+        schema:
+          type: string
+      - name: top_k
+        description: Maximum results (default 10)
+        required: false
+        schema:
+          type: integer
+
+  - name: explain_playbook
+    description: Get detailed information about a specific playbook
+    parameters:
+      - name: playbook_id
+        description: UUID of the playbook
+        required: true
+        schema:
+          type: string
+
+  - name: submit_feedback
+    description: Submit analyst feedback to improve future recommendations
+    parameters:
+      - name: query
+        description: Original query that generated the recommendation
+        required: true
+        schema:
+          type: string
+      - name: playbook_id
+        description: UUID of the recommended playbook
+        required: true
+        schema:
+          type: string
+      - name: accepted
+        description: Whether the analyst used the recommendation (true/false)
+        required: true
+        schema:
+          type: boolean
+      - name: confidence_score
+        description: Original confidence score from the recommendation
+        required: false
+        schema:
+          type: number
+      - name: session_id
+        required: false
+        schema:
+          type: string
+
+  - name: health_check
+    description: Check if the recommendation service is running
+    parameters: []
