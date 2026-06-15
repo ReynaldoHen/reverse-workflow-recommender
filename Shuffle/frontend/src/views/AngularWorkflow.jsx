@@ -24,6 +24,9 @@ import { InstantSearch, Configure, connectSearchBox, connectHits, Index } from '
 import algoliasearch from 'algoliasearch/lite';
 import useDebouncedCallback from "../utils/useDebouncedCallback.jsx";
 import {
+  Snackbar,
+  Alert,
+
   Zoom,
   Fade,
   Slide,
@@ -21405,6 +21408,13 @@ const AngularWorkflow = (defaultprops) => {
 
     const iconSvgSize = 21;
 
+    const [reverseWorkflowState, setReverseWorkflowState] = useState({
+      open: false,
+      loading: false,
+      result: null,
+      error: null,
+    })
+
     // Play/Stop button
     const executionButton = executionRunning ? (
       <Tooltip color="primary" title="Stop execution" placement="top">
@@ -21858,53 +21868,53 @@ const AngularWorkflow = (defaultprops) => {
           {/* Workflow Reverse Button */}
           <Tooltip color="secondary" title="Execute Reverse Workflow" placement="top">
             <IconButton
-              disabled={workflow.public || executionRequestStarted}
-              
-              onClick={async () => { // Logic to execute reverse workflow
-                try {
+              type="button"
+              disabled={workflow.public || executionRequestStarted || reverseWorkflowState.loading}
+              onClick={async (e) => {
+                e.stopPropagation()
+                e.preventDefault()
 
-                  // console.log("FULL WORKFLOW:", workflow) // Debugging to check the full workflow object before sending the request
-                  // console.log("WORKFLOW ACTIONS:", workflow.actions) // Debugging to check the actions in the workflow
-                  // console.log("WORKFLOW BRANCHES:", workflow.branches) // Debugging to check the branches in the workflow
-                  
+                // Set loading
+                setReverseWorkflowState({ open: true, loading: true, result: null, error: null })
+
+                try {
                   console.log("Execute Reverse Workflow")
 
-                  const response = await fetch(
-                    "http://localhost:5005/api/reverse-workflow",
-                    {
-                      method: "POST",
-                      headers: {
-                        "Content-Type": "application/json",
-                      },
-                      body: JSON.stringify({
-                        workflow_id: workflow.id,
-                        workflow_name: workflow.name,
-                        actions: workflow.actions,
-                        branches: workflow.branches,
-                      }),
-                    }
-                  )
+                  const response = await fetch("http://localhost:5005/api/reverse-workflow", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      workflow_id: workflow.id,
+                      workflow_name: workflow.name,
+                      actions: workflow.actions,
+                      branches: workflow.branches,
+                    }),
+                  })
 
                   const result = await response.json()
-
                   console.log("Reverse Workflow Result:", result)
 
-                  setWorkflowGenerationModalOpen(true)
+                  // ✅ Set result — JANGAN setWorkflowGenerationModalOpen(true)
+                  setReverseWorkflowState({ open: true, loading: false, result, error: null })
 
                 } catch (error) {
                   console.error("Reverse Workflow Error:", error)
+                  setReverseWorkflowState({ open: true, loading: false, result: null, error: error.message })
                 }
               }}
-
               sx={{
                 minWidth: buttonSize,
                 width: buttonSize,
                 height: buttonSize,
                 borderRadius: "8px",
                 marginLeft: "8px",
-                background: "linear-gradient(135deg, #7B61FF 0%, #5B8CFF 100%)",
+                background: reverseWorkflowState.loading
+                  ? "#494949"
+                  : "linear-gradient(135deg, #7B61FF 0%, #5B8CFF 100%)",
                 color: "#ffffff",
                 padding: 0,
+                position: "relative",
+                zIndex: 1,
                 "&:hover": {
                   background: "linear-gradient(135deg, #927CFF 0%, #74A0FF 100%)",
                 },
@@ -21914,17 +21924,42 @@ const AngularWorkflow = (defaultprops) => {
                 },
               }}
             >
-              <img
-                src="/icons/workflow-page/reverseWorkflow.svg"
-                alt="Reverse Workflow"
-                style={{
-                  width: 18,
-                  height: 18,
-                }}
-                draggable={false}
-              />
+              {reverseWorkflowState.loading
+                ? <CircularProgress size={16} style={{ color: "#fff" }} />
+                : <img
+                    src="/icons/workflow-page/reverseWorkflow.svg"
+                    alt="Reverse Workflow"
+                    style={{ width: 18, height: 18, pointerEvents: "none" }}
+                    draggable={false}
+                  />
+              }
             </IconButton>
           </Tooltip>
+
+          <Snackbar
+            open={reverseWorkflowState.open}
+            autoHideDuration={reverseWorkflowState.error ? 6000 : 4000}
+            onClose={() => setReverseWorkflowState(prev => ({ ...prev, open: false }))}
+            anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+          >
+            <Alert
+              onClose={() => setReverseWorkflowState(prev => ({ ...prev, open: false }))}
+              severity={reverseWorkflowState.error ? "error" : "success"}
+              variant="filled"
+              sx={{ 
+                minWidth: 300,
+                color: "#ffffff",        // ✅ Warna teks putih
+                "& .MuiAlert-message": {
+                color: "#ffffff", 
+                },
+              }}
+            >
+              {reverseWorkflowState.error
+                ? `Reverse Workflow failed: ${reverseWorkflowState.error}`
+                : "Reverse Workflow executed successfully!"
+              }
+            </Alert>
+          </Snackbar>
 
             {/* WorkflowMenu - was conditionally rendered in old code */}
             {workflow.configuration !== null &&

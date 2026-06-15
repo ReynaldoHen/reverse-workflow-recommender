@@ -222,14 +222,14 @@ function buildShuffleWorkflow(plan) {
 // agar selalu dapat nilai terbaru dari process.env
 // ─────────────────────────────────────────────
 async function importWorkflowToShuffle(workflowJson) {
-  const SHUFFLE_URL     = process.env.SHUFFLE_URL     || "http://localhost:3000";
+  const SHUFFLE_API_URL     = process.env.SHUFFLE_API_URL     || "http://localhost:3000";
   const SHUFFLE_API_KEY = process.env.SHUFFLE_API_KEY || "";
 
   if (!SHUFFLE_API_KEY) {
     throw new Error("[importer] SHUFFLE_API_KEY tidak di-set di .env");
   }
 
-  const url = `${SHUFFLE_URL}/api/v1/workflows`;
+  const url = `${SHUFFLE_API_URL}/api/v1/workflows`;
 
   console.log("[importer] Connecting to:", url);
   console.log("[importer] API_KEY:", `'${SHUFFLE_API_KEY}'`);

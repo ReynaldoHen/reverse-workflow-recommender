@@ -126,7 +126,7 @@ async function fetchFromLocal() {
     try {
 
       const response = await axios.get(
-        `${process.env.SHUFFLE_URL}/api/v1/apps`,
+        `${process.env.SHUFFLE_API_URL}/api/v1/apps`,
         {
           headers,
           params: { limit: LIMIT, offset: offset },

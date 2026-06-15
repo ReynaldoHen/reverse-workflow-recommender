@@ -29,45 +29,45 @@ app.post("/api/reverse-workflow", async (req, res) => { //endpoint untuk menerim
 
     // 2. Parse Shuffle JSON → nodes + edges
     const parsedWorkflow = parseWorkflow(actions, branches)
-    // console.log("[2] Workflow parsed:", parsedWorkflow.nodes.length, "nodes,", parsedWorkflow.edges.length, "edges")
+    console.log("[2] Workflow parsed:", parsedWorkflow.nodes.length, "nodes,", parsedWorkflow.edges.length, "edges")
  
     // 3. Build graph (nodes + relationships)
     const graphData = buildGraph(parsedWorkflow, workflow_id, workflow_name)
-    // console.log("[3] Graph built with", graphData.nodes.length, "nodes and", graphData.relationships.length, "relationships")
+    console.log("[3] Graph built with", graphData.nodes.length, "nodes and", graphData.relationships.length, "relationships")
  
     // 4. Simpan graph ke Neo4j
     await saveGraphToNeo4j(graphData)
     // console.log("[4] Graph saved to Neo4j")
  
-    // Step 5 & 6 — Generate + Validate + Retry (sudah terintegrasi)
-    const { workflow, importResult, attempts } = await generateWithRetry(
+    // // Step 5 & 6 — Generate + Validate + Retry (sudah terintegrasi)
+    // const { workflow, importResult, attempts } = await generateWithRetry(
   
-      (lastValidation, attempt) => {
-        // Bangun messages untuk LLM
-        // lastValidation = null pada attempt pertama
-        //               = { valid, errors, correction_instructions } pada retry
-        return [
-          {
-            role:    "system",
-            content: `You are a SOAR Workflow Engineer...
-                      [insert system prompt + ... here]`,
-          },
-          {
-            role:    "user",
-            content: attempt === 1
-              // Prompt pertama — kirim context workflow
-              ? `Generate a reverse workflow for: ${workflow_name}\n[Neo4j context]`
-              // Retry — sertakan error dari attempt sebelumnya
-              : `The previous workflow was invalid. Fix the following error and generate again:\n
-                ${JSON.stringify(lastValidation, null, 2)}`,
-          },
-        ]
-      },
+    //   (lastValidation, attempt) => {
+    //     // Bangun messages untuk LLM
+    //     // lastValidation = null pada attempt pertama
+    //     //               = { valid, errors, correction_instructions } pada retry
+    //     return [
+    //       {
+    //         role:    "system",
+    //         content: `You are a SOAR Workflow Engineer...
+    //                   [insert system prompt + ... here]`,
+    //       },
+    //       {
+    //         role:    "user",
+    //         content: attempt === 1
+    //           // Prompt pertama — kirim context workflow
+    //           ? `Generate a reverse workflow for: ${workflow_name}\n[Neo4j context]`
+    //           // Retry — sertakan error dari attempt sebelumnya
+    //           : `The previous workflow was invalid. Fix the following error and generate again:\n
+    //             ${JSON.stringify(lastValidation, null, 2)}`,
+    //       },
+    //     ]
+    //   },
 
-      3 // maxRetries
-    )
+    //   3 // maxRetries
+    // )
 
-    console.log(`[5-6] Workflow generated and imported in ${attempts} attempt(s)`)
+    // console.log(`[5-6] Workflow generated and imported in ${attempts} attempt(s)`)
     
     // // TODO: ganti getMockWorkflowPlan() dengan panggilan LLM
     // const workflowPlan = getMockWorkflowPlan()

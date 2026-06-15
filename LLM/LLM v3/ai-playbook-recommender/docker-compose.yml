@@ -68,7 +68,7 @@ services:
     container_name: playbook-grafana
     profiles: ["monitoring"]
     ports:
-      - "3000:3000"
+      - "3333:3333"
 
 volumes:
   pgdata:
