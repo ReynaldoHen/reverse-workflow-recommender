@@ -4725,7 +4725,7 @@ func runInitEs(ctx context.Context) {
 		if len(username) == 0 || len(password) == 0 || len(activeOrgs) > 0 {
 			log.Printf("[DEBUG] SHUFFLE_DEFAULT_USERNAME and SHUFFLE_DEFAULT_PASSWORD not defined as environments. Running without default user.")
 		} else {
-			apikey := os.Getenv("SHUFFLE_DEFAULT_APIKEY")
+			apikey := os.Getenv("SHUFFLE_API_KEY")
 
 			if len(parsedApikey) == 0 {
 				parsedApikey = apikey

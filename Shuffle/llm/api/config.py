@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     llm_temperature: float = 0.1
     llm_max_retries: int = 3
 
+    # Neo4j Aura (dibaca dari .env: NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD, NEO4J_DATABASE)
+    neo4j_uri: str = ""
+    neo4j_username: str = ""
+    neo4j_password: str = ""
+    neo4j_database: str = ""
+
     # Shuffle SOAR integration (first-class)
     shuffle_api_url: str = ""
     shuffle_api_key: str = ""
@@ -49,6 +55,11 @@ class Settings(BaseSettings):
             f"postgresql+psycopg://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
+
+    @property
+    def neo4j_auth(self) -> tuple[str, str]:
+        """Tuple (username, password) untuk AsyncGraphDatabase.driver(auth=...)."""
+        return (self.neo4j_username, self.neo4j_password)
 
     @property
     def shuffle_connected(self) -> bool:

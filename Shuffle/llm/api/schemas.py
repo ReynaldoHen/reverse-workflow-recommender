@@ -1,7 +1,6 @@
 """Pydantic request/response models."""
-from typing import Optional, Any
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
-
 
 # ---------- Auth ----------
 class LoginRequest(BaseModel):
@@ -87,6 +86,45 @@ class FeedbackRequest(BaseModel):
     playbook_slug: str
     helpful: bool
     rank: Optional[int] = None
+
+
+# ---------- Reverese Workflow Service ----------
+class RetryError(BaseModel):
+    """Single validation error forwarded from Node.js on retry attempts."""
+    code:     str            # e.g. "MISSING_FIELD", "INVALID_ACTION_NAME", "IMPORT_ERROR"
+    location: str            # e.g. "actions[0]", "root", "llm_service"
+    message:  str
+ 
+ 
+class RetryContext(BaseModel):
+    """
+    Populated by Node.js when forwarding validation errors back to the LLM.
+    Null on the first attempt; present on retries so the LLM can self-correct.
+    """
+    attempt:                  int
+    valid:                    bool = False
+    errors:                   List[RetryError] = []
+    correction_instructions:  Optional[str] = None
+ 
+ 
+class ReverseWorkflowRequest(BaseModel):
+    """
+    Request from reverse-workflow-service (Node.js) at Step 5.
+    The workflow graph must already be saved to Neo4j (done at Step 4).
+    """
+    workflow_id:    str                      # Shuffle workflow UUID
+    workflow_name:  str                      # Human-readable name
+    retry_context:  Optional[RetryContext] = None  # None on first call
+ 
+ 
+class ReverseWorkflowResponse(BaseModel):
+    """
+    Response back to reverse-workflow-service.
+    raw_output is the Ollama response string (may contain markdown code fences —
+    Node.js strips them before JSON.parse()).
+    """
+    raw_output: Optional[str] = None   # Raw Ollama output on success
+    error:      Optional[str] = None   # Error message on failure
 
 
 RecommendResponse.model_rebuild()
