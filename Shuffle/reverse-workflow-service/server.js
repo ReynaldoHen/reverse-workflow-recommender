@@ -6,12 +6,12 @@ const cors = require("cors") // mengambil library cors untuk mengizinkan permint
 
 const { parseWorkflow } = require("./parsers/workflowParser") // mengambil fungsi parseWorkflow dari file workflowParser.js
 const { buildGraph } = require("./graph/graphBuilder") // mengambil fungsi buildGraph dari file graphBuilder.js
-// const driver = require("./neo4j/neo4jDriver") // mengambil driver Neo4j dari file neo4jDriver.js untuk melakukan operasi database Neo4j
+const driver = require("./neo4j/neo4jDriver") // mengambil driver Neo4j dari file neo4jDriver.js untuk melakukan operasi database Neo4j
 const { saveGraphToNeo4j } = require("./neo4j/saveGraph") // mengambil fungsi saveGraphToNeo4j dari file saveGraph.js untuk menyimpan graph ke database Neo4j
 const { syncAppCatalog } = require("./shuffleApps/syncAppCatalog") // mengambil fungsi syncAppCatalog dari file syncAppCatalog.js untuk menyinkronkan katalog aplikasi dari Shuffle ke Neo4j
 const { generateWithRetry } = require("./llm/llmService") // mengambil fungsi generateWithRetry dari file llmService.js untuk memanggil LLM dengan mekanisme retry jika terjadi error atau output tidak valid
 
-// const { buildShuffleWorkflow, importWorkflowToShuffle } = require("./builders/buildShuffleWorkflow") // mengambil fungsi buildShuffleWorkflow dan importWorkflowToShuffle dari file buildShuffleWorkflow.js untuk membangun workflow plan yang dapat diimpor ke Shuffle
+const { buildShuffleWorkflow, importWorkflowToShuffle } = require("./builders/buildShuffleWorkflow") // mengambil fungsi buildShuffleWorkflow dan importWorkflowToShuffle dari file buildShuffleWorkflow.js untuk membangun workflow plan yang dapat diimpor ke Shuffle
 
 const app = express() // membuat instance dari express
 app.use(cors()) // mengizinkan semua permintaan dari domain/browser lain
@@ -39,47 +39,18 @@ app.post("/api/reverse-workflow", async (req, res) => { //endpoint untuk menerim
     await saveGraphToNeo4j(graphData)
     // console.log("[4] Graph saved to Neo4j")
  
-    // // Step 5 & 6 — Generate + Validate + Retry (sudah terintegrasi)
-    // const { workflow, importResult, attempts } = await generateWithRetry(
-  
-    //   (lastValidation, attempt) => {
-    //     // Bangun messages untuk LLM
-    //     // lastValidation = null pada attempt pertama
-    //     //               = { valid, errors, correction_instructions } pada retry
-    //     return [
-    //       {
-    //         role:    "system",
-    //         content: `You are a SOAR Workflow Engineer...
-    //                   [insert system prompt + ... here]`,
-    //       },
-    //       {
-    //         role:    "user",
-    //         content: attempt === 1
-    //           // Prompt pertama — kirim context workflow
-    //           ? `Generate a reverse workflow for: ${workflow_name}\n[Neo4j context]`
-    //           // Retry — sertakan error dari attempt sebelumnya
-    //           : `The previous workflow was invalid. Fix the following error and generate again:\n
-    //             ${JSON.stringify(lastValidation, null, 2)}`,
-    //       },
-    //     ]
-    //   },
-
-    //   3 // maxRetries
-    // )
-
-    // console.log(`[5-6] Workflow generated and imported in ${attempts} attempt(s)`)
+    // 5 & 6. Generate Workflow JSON via Python LLM service + Validasi + Auto Retry
+    // Python service (llm/) menangani: query Neo4j → RAG retrieval → Ollama → raw JSON string
+    // Node.js menangani: parseJSON → validateWorkflow → importWorkflowToShuffle
+    // Jika gagal validasi, error dikirim kembali ke Python service sebagai retry_context
+    const { workflow, importResult, attempts } = await generateWithRetry(
+      workflow_id,    // workflow sudah ada di Neo4j (Step 4)
+      workflow_name,  // untuk prompt LLM
+      3               // maxRetries
+    )
+ 
+    console.log(`[5-6] Workflow generated and imported in ${attempts} attempt(s)`)
     
-    // // TODO: ganti getMockWorkflowPlan() dengan panggilan LLM
-    // const workflowPlan = getMockWorkflowPlan()
-    // console.log("[5] Workflow plan generated:", workflowPlan.workflow_name)
- 
-    // // 6. Validasi Output LLM, jika belum valid, error akan di kirim ke LLm untuk perbaikan
-
-    // // 7. Import workflow ke Shuffle via API
-    // const importResult = await importWorkflowToShuffle(workflowPlan)
-    // console.log("[8] Imported to Shuffle, new workflow ID:", importResult.id)
- 
- 
     // Response sukses
     res.json({
       success:                 true,

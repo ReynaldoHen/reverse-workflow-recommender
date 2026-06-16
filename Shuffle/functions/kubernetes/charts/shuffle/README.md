@@ -68,7 +68,7 @@ backend:
         secretKeyRef:
           name: "shuffle-initial-user"
           key: password
-    - name: SHUFFLE_DEFAULT_APIKEY
+    - name: SHUFFLE_API_KEY
       valueFrom:
         secretKeyRef:
           name: "shuffle-initial-user"
@@ -96,7 +96,7 @@ SHUFFLE_DOWNLOAD_AUTH_PASSWORD: ""
 # If not set, you are prompted with an admin user creation dialog when visiting the shuffle frontend for the first time.
 SHUFFLE_DEFAULT_USERNAME: admin
 SHUFFLE_DEFAULT_PASSWORD: MySecretAdminPassword1234!
-SHUFFLE_DEFAULT_APIKEY: "72E41083-A6F6-4A1B-8538-B06B577F47F0" # Shuffle uses uuid v4
+SHUFFLE_API_KEY: "72E41083-A6F6-4A1B-8538-B06B577F47F0" # Shuffle uses uuid v4
 
 # Encryption modifier. This HAS to be set to encrypt any authentication being used in Shuffle.
 # This is put together with other relevant values to ensure multiple parts are needed to decrypt.
