@@ -1,100 +1,89 @@
 const driver = require("../neo4j/neo4jDriver")
 
 // ─────────────────────────────────────────────
-// MAIN
+// SAFE SERIALIZER (WAJIB UNTUK NEO4J)
 // ─────────────────────────────────────────────
+const safe = (v) => {
+  if (v === null || v === undefined) return ""
+  if (typeof v === "object") return JSON.stringify(v)
+  return v
+}
 
-/**
- * Replace ALL app data in Neo4j with fresh data from Shuffle.
- *
- * Strategy: sync_batch_id
- *  1. Generate a unique batchId for this run.
- *  2. MERGE every APP / ACTION_TEMPLATE / PARAMETER_TEMPLATE
- *     and stamp it with the batchId.
- *  3. After all upserts succeed, DELETE nodes whose batchId
- *     is older than this run (i.e. apps removed from Shuffle).
- *  4. Persist sync metadata (timestamp + count) for TTL checks.
- *
- * This is safe against mid-sync failures: if the process dies
- * partway through, no data is lost — the old nodes remain until
- * the next successful full run.
- */
 async function saveAppsToNeo4j(apps) {
+  const session = driver.session()
+  const batchId = Date.now().toString()
 
-  const session   = driver.session()
-  const batchId   = Date.now().toString()
-  let   savedCount = 0
-
-  console.log(
-    `[apps] Starting Neo4j sync — batch ${batchId} ` +
-    `(${apps.length} apps)`
-  )
+  console.log(`[apps] Saving ${apps.length} apps (batch ${batchId})`)
 
   try {
 
+    // ─────────────────────────────
+    // APP + ACTION TEMPLATE SYNC
+    // ─────────────────────────────
     for (const app of apps) {
 
-      // ────────────────────────────────────────
-      // APP NODE
-      // ────────────────────────────────────────
+      // ─────────────────────────────
+      // APP NODE (GLOBAL CATALOG)
+      // ─────────────────────────────
       await session.run(
         `
         MERGE (a:APP {app_id: $app_id})
-
         SET a.app_name     = $app_name,
             a.app_version  = $app_version,
-            a.small_image  = $small_image,
             a.large_image  = $large_image,
             a.sync_batch   = $batchId
         `,
         {
-          app_id:      app.id,
-          app_name:    app.name,
-          app_version: app.app_version      || "",
-          small_image: app.small_image      || "",
-          large_image: app.large_image      || "",
+          app_id: app.id,
+          app_name: safe(app.name),
+          app_version: safe(app.app_version),
+          large_image: safe(app.large_image),
           batchId,
         }
       )
 
-      // ────────────────────────────────────────
-      // ACTION_TEMPLATE NODES
-      // ────────────────────────────────────────
+      // ─────────────────────────────
+      // ACTION TEMPLATE
+      // ─────────────────────────────
       for (const action of (app.actions || [])) {
 
         const actionKey = `${app.id}_${action.name}`
 
         await session.run(
           `
-          MERGE (act:ACTION_TEMPLATE {action_key: $action_key})
-
-          SET act.action_name  = $action_name,
-              act.action_label = $action_label,
-              act.description  = $description,
-              act.sync_batch   = $batchId
+          MERGE (a:ACTION_TEMPLATE {action_key: $key})
+          SET a.name        = $name,
+              a.label       = $label,
+              a.description = $description,
+              a.parameters  = $parameters,
+              a.sync_batch  = $batchId
           `,
           {
-            action_key:   actionKey,
-            action_name:  action.name,
-            action_label: action.label       || "",
-            description:  action.description || "",
+            key: actionKey,
+            name: safe(action.name),
+            label: safe(action.label),
+            description: safe(action.description),
+            parameters: safe(action.parameters),
             batchId,
           }
         )
 
-        // APP ──HAS_ACTION──> ACTION_TEMPLATE
+        // RELATION: APP -> ACTION
         await session.run(
           `
-          MATCH (a:APP           {app_id:     $app_id})
-          MATCH (act:ACTION_TEMPLATE {action_key: $action_key})
-          MERGE (a)-[:HAS_ACTION]->(act)
+          MATCH (app:APP {app_id: $app_id})
+          MATCH (act:ACTION_TEMPLATE {action_key: $key})
+          MERGE (app)-[:HAS_ACTION]->(act)
           `,
-          { app_id: app.id, action_key: actionKey }
+          {
+            app_id: app.id,
+            key: actionKey,
+          }
         )
 
-        // ────────────────────────────────────────
-        // PARAMETER_TEMPLATE NODES
-        // ────────────────────────────────────────
+        // ─────────────────────────────
+        // PARAMETER TEMPLATE
+        // ─────────────────────────────
         for (const param of (action.parameters || [])) {
 
           const paramKey = `${actionKey}_${param.name}`
@@ -102,106 +91,64 @@ async function saveAppsToNeo4j(apps) {
           await session.run(
             `
             MERGE (p:PARAMETER_TEMPLATE {parameter_key: $paramKey})
-
-            SET p.parameter_name = $parameter_name,
+            SET p.parameter_name = $name,
                 p.required       = $required,
-                p.parameter_type = $parameter_type,
+                p.parameter_type = $type,
                 p.description    = $description,
                 p.sync_batch     = $batchId
             `,
             {
               paramKey,
-              parameter_name: param.name,
-              required:       param.required        || false,
-              parameter_type: param.schema?.type    || "string",
-              description:    param.description     || "",
+              name: safe(param.name),
+              required: !!param.required,
+              type: safe(param.schema?.type || param.type || "string"),
+              description: safe(param.description),
               batchId,
             }
           )
 
-          // ACTION_TEMPLATE ──REQUIRES_PARAMETER──> PARAMETER_TEMPLATE
+          // RELATION: ACTION -> PARAMETER
           await session.run(
             `
-            MATCH (act:ACTION_TEMPLATE  {action_key:    $action_key})
+            MATCH (act:ACTION_TEMPLATE {action_key: $actionKey})
             MATCH (p:PARAMETER_TEMPLATE {parameter_key: $paramKey})
             MERGE (act)-[:REQUIRES_PARAMETER]->(p)
             `,
-            { action_key: actionKey, paramKey }
+            {
+              actionKey,
+              paramKey,
+            }
           )
         }
       }
-
-      savedCount++
     }
 
-    // ────────────────────────────────────────
-    // REPLACE: remove stale nodes from old batches
-    // ────────────────────────────────────────
-    console.log("[apps] Removing stale nodes from previous batches...")
-
-    // detach-delete stale PARAMETERs
-    const delParams = await session.run(
-      `
-      MATCH (p:PARAMETER_TEMPLATE)
-      WHERE p.sync_batch <> $batchId OR p.sync_batch IS NULL
-      WITH  p, count(p) AS n
-      DETACH DELETE p
-      RETURN n
-      `,
-      { batchId }
-    )
-
-    // detach-delete stale ACTIONs
-    const delActions = await session.run(
-      `
-      MATCH (act:ACTION_TEMPLATE)
-      WHERE act.sync_batch <> $batchId OR act.sync_batch IS NULL
-      WITH  act, count(act) AS n
-      DETACH DELETE act
-      RETURN n
-      `,
-      { batchId }
-    )
-
-    // detach-delete stale APPs
-    const delApps = await session.run(
-      `
-      MATCH (a:APP)
-      WHERE a.sync_batch <> $batchId OR a.sync_batch IS NULL
-      WITH  a, count(a) AS n
-      DETACH DELETE a
-      RETURN n
-      `,
-      { batchId }
-    )
-
-    // ────────────────────────────────────────
-    // PERSIST SYNC METADATA (for TTL checks)
-    // ────────────────────────────────────────
+    // ─────────────────────────────
+    // SYNC META (TTL CONTROL)
+    // ─────────────────────────────
     await session.run(
       `
       MERGE (m:APP_SYNC_META {id: "singleton"})
-
       SET m.last_synced_at = datetime(),
-          m.last_batch_id  = $batchId,
-          m.total_apps     = $total
+          m.total_apps     = $total,
+          m.last_batch_id  = $batchId
       `,
-      { batchId, total: savedCount }
+      {
+        total: apps.length,
+        batchId,
+      }
     )
 
-    console.log(
-      `[apps] Sync complete — ${savedCount} apps saved to Neo4j`
-    )
+    console.log("[apps] Sync complete")
 
-  } catch (error) {
-
-    console.error("[apps] saveAppsToNeo4j error:", error)
-    throw error   // re-throw so syncAppCatalog can handle it
-
+  } catch (err) {
+    console.error("[apps] Neo4j error:", err.message)
+    throw err
   } finally {
-
     await session.close()
   }
 }
 
-module.exports = { saveAppsToNeo4j }
+module.exports = {
+  saveAppsToNeo4j
+}

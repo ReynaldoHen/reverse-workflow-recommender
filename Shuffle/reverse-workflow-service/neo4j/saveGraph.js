@@ -1,64 +1,101 @@
-const driver = require("./neo4jDriver") // mengambil driver Neo4j dari file neo4jDriver.js untuk melakukan operasi database Neo4j
+const driver = require("./neo4jDriver")
 
-// fungsi untuk menyimpan graph ke database Neo4j Aura dengan menggunakan driver yang telah dibuat
 const saveGraphToNeo4j = async (graphData) => {
-
-  const session = driver.session() // membuat session untuk menjalankan query ke database Neo4j
+  const session = driver.session()
 
   try {
-    // simpan nodes
+
+    // ─────────────────────────────
+    // 1. SAVE NODES (CONSISTENT SCHEMA)
+    // ─────────────────────────────
     for (const node of graphData.nodes) {
 
-      // default type jika kosong
-      const nodeType = node.type || "ACTION"
+      const props = node.properties || {}
+
+      // ───────── WORKFLOW ─────────
+      if (node.type === "WORKFLOW") {
+
+        await session.run(
+          `
+          MERGE (n:WORKFLOW {workflow_id: $id})
+          SET n.workflow_id = $id,
+              n += $props
+          `,
+          {
+            id: node.id,
+            props
+          }
+        )
+      }
+
+      // ───────── ACTION ─────────
+      else if (node.type === "ACTION") {
+
+        await session.run(
+          `
+          MERGE (n:ACTION {action_id: $id})
+          SET n.action_id = $id,
+              n += $props
+          `,
+          {
+            id: node.id,
+            props
+          }
+        )
+      }
+
+      // ───────── APP ─────────
+      else if (node.type === "APP") {
+
+        await session.run(
+          `
+          MERGE (n:APP {app_id: $id})
+          SET n.app_id = $id,
+              n += $props
+          `,
+          {
+            id: node.id,
+            props
+          }
+        )
+      }
+    }
+
+    // ─────────────────────────────
+    // 2. RELATIONSHIPS (CLEAN & FAST)
+    // ─────────────────────────────
+    for (const rel of graphData.relationships) {
 
       await session.run(
         `
-        MERGE (n:Entity:${nodeType} {id: $id})
-        SET n.id = $id
-        SET n += $properties
+        MATCH (a)
+        WHERE a.workflow_id = $source
+           OR a.action_id = $source
+           OR a.app_id = $source
+
+        MATCH (b)
+        WHERE b.workflow_id = $target
+           OR b.action_id = $target
+           OR b.app_id = $target
+
+        MERGE (a)-[r:${rel.type}]->(b)
+        SET r += $props
         `,
         {
-          id: node.id,
-          properties: node.properties || {},
+          source: rel.source,
+          target: rel.target,
+          props: rel.properties || {}
         }
       )
     }
-    // simpan relationships
-    for (const rel of graphData.relationships) {
-    
-    // console.log("REL:", rel) // menampilkan isi rel yang akan disimpan ke database Neo4j untuk debugging
 
-    const relationshipType = rel.type || "CONNECTS_TO"
+    console.log("Graph saved to Neo4j")
 
-    await session.run(
-      `
-      MATCH (a:Entity)
-      WHERE a.id = $source
-
-      MATCH (b:Entity)
-      WHERE b.id = $target
-
-      MERGE (a)-[r:${relationshipType}]->(b)
-
-      SET r += $properties
-      `,
-      {
-        source: rel.source,
-        target: rel.target,
-        properties: rel.properties || {},
-      }
-    )
-    }
-
-    console.log("Graph saved to Neo4j") // jika graph berhasil disimpan ke database Neo4j, log pesan sukses di console
   } catch (error) {
-    console.error("Neo4j Save Error:", error) // jika terjadi error saat menyimpan graph ke database Neo4j, log error di console
+    console.error("Neo4j Save Error:", error)
   } finally {
-    await session.close() // menutup session setelah selesai menjalankan query untuk menyimpan graph ke database Neo4j
+    await session.close()
   }
 }
 
-module.exports = { // ekspor fungsi saveGraphToNeo4j agar dapat digunakan di file lain untuk menyimpan graph ke database Neo4j
-  saveGraphToNeo4j,
-}
+module.exports = { saveGraphToNeo4j }

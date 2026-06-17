@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends
-from ..auth import current_user
 from ..schemas import RecommendRequest, RecommendResponse, PlaybookHit
 from ..services.recommendation import recommender
 from ..services.explainer import explainer
@@ -9,7 +8,7 @@ router = APIRouter(prefix="/recommend", tags=["recommend"])
 
 
 @router.post("", response_model=RecommendResponse)
-async def recommend(req: RecommendRequest, user: str = Depends(current_user)):
+async def recommend(req: RecommendRequest):
     try:
         raw = await recommender.recommend(req.query, top_k=req.top_k, category=req.category)
     except Exception as exc:

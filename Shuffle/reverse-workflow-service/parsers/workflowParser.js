@@ -1,28 +1,38 @@
-// fungsi untuk parsing data actions dan branches yang diterima dari server.js menjadi struktur nodes dan edges yang dapat digunakan untuk membangun graph
-const parseWorkflow = (actions, branches) => { 
+const safe = (val, fallback = "") => {
+  return val === undefined || val === null ? fallback : val
+}
 
-  // iterasi setiap action yang diterima dan buat node dengan properti yang sesuai dengan data yang diterima
-  const nodes = actions.map((action) => { 
+// fungsi untuk parsing data actions dan branches menjadi nodes & edges
+const parseWorkflow = (actions, branches) => {
+
+  // ─────────────────────────────────────────────
+  // NORMALIZE NODES
+  // ─────────────────────────────────────────────
+  const nodes = actions.map((action) => {
     return {
-      id: action.id,
-      label: action.label,
-      app_name: action.app_name,
-      action_name: action.name,
-      category: action.category,
-      position: action.position,
-      app_id: action.app_id,
-      app_version: action.app_version,
-      isStartNode: action.isStartNode,
-      environment: action.environment,
-      parameters: action.parameters,
+      id: safe(action.id),
+      label: safe(action.label, action.name), // fallback penting
+      app_name: safe(action.app_name),
+      action_name: safe(action.action_name || action.name),
+      category: safe(action.category),
+      position: safe(action.position, { x: 0, y: 0 }),
+      app_id: safe(action.app_id),
+      app_version: safe(action.app_version),
+      isStartNode: !!action.isStartNode,
+      environment: safe(action.environment),
+      parameters: Array.isArray(action.parameters) ? action.parameters : [],
     }
   })
 
-  // iterasi setiap branch yang diterima dan buat edge dengan properti yang sesuai dengan data yang diterima
-  const edges = branches.map((branch) => { 
+  // ─────────────────────────────────────────────
+  // NORMALIZE EDGES
+  // ─────────────────────────────────────────────
+  const edges = branches.map((branch) => {
     return {
-      source: branch.source_id,
-      target: branch.destination_id,
+      source: safe(branch.source_id),
+      target: safe(branch.destination_id),
+      label: safe(branch.label, ""),
+      conditions: safe(branch.conditions, ""),
     }
   })
 
@@ -32,6 +42,6 @@ const parseWorkflow = (actions, branches) => {
   }
 }
 
-module.exports = { // ekspor fungsi parseWorkflow agar dapat digunakan di file lain
+module.exports = {
   parseWorkflow,
 }

@@ -2,163 +2,204 @@ const path = require("path")
 require("dotenv").config({ path: path.resolve(__dirname, "../../.env") })
 
 const axios = require("axios")
-const { validateWorkflow }                          = require("../validators/validateWorkflow")
-const { importWorkflowToShuffle, buildImportError } = require("../builders/buildShuffleWorkflow")
 
-// ─────────────────────────────────────────────────────────────────────────────
+const { validateWorkflow } = require("../validators/validateWorkflow")
+const {
+  importWorkflowToShuffle,
+  buildImportError
+} = require("../builders/buildShuffleWorkflow")
+
+const { buildReverseWorkflowPrompt } = require("../prompt/buildReverseWorkflowPrompt")
+// const { saveDebugJSON } = require("../utils/saveDebugJSON")
+
+// ─────────────────────────────────────────────
 // CONFIG
-// Set LLM_API_URL=http://llm-service:8000 in .env when running in Docker,
-// or http://localhost:8000 when running locally.
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
 const LLM_API_URL = process.env.LLM_API_URL || "http://localhost:8000"
+const LLM_API_PREFIX = process.env.LLM_API_PREFIX || "/api/v1"
+const REVERSE_ENDPOINT = `${LLM_API_URL}${LLM_API_PREFIX}/generate/reverse`
 
-// ─────────────────────────────────────────────────────────────────────────────
-// HTTP CALL TO PYTHON LLM SERVICE
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Call the Python LLM service to generate a reverse workflow.
- *
- * The Python service handles internally:
- *   1. Query Neo4j for the workflow graph (using workflow_id)
- *   2. Retrieve similar playbooks via RAG (BGE-M3 + reranker)
- *   3. Build the full prompt with graph + RAG context
- *   4. Call Ollama to generate the Shuffle workflow JSON
- *
- * @param {string}      workflow_id   - Source workflow ID (already in Neo4j from Step 4)
- * @param {string}      workflow_name - Source workflow name
- * @param {object|null} retryContext  - Validation errors from last attempt, or null on first call
- * @returns {Promise<string>}           Raw output string from Ollama (may contain code fences)
- */
-async function callLLM(workflow_id, workflow_name, retryContext = null) {
-  let response
+// ─────────────────────────────────────────────
+// CALL LLM
+// ─────────────────────────────────────────────
+async function callLLM(prompt, retryContext = null) {
   try {
-    response = await axios.post(
-      `${LLM_API_URL}/generate/reverse`,
-      { workflow_id, workflow_name, retry_context: retryContext },
-      { timeout: 120_000, headers: { "Content-Type": "application/json" } }
+    const response = await axios.post(
+      REVERSE_ENDPOINT,
+      {
+        prompt,
+        retry_context: retryContext
+      },
+      {
+        timeout: 120_000,
+        headers: { "Content-Type": "application/json" }
+      }
     )
+
+    const { raw_output, error } = response.data
+
+    if (error) throw new Error(`[LLM] Service error: ${error}`)
+    if (!raw_output) throw new Error("[LLM] Empty LLM output")
+
+    return raw_output
+
   } catch (err) {
     const detail = err.response?.data?.detail || err.message
-    throw new Error(`[LLM] Cannot reach Python LLM service at ${LLM_API_URL} — ${detail}`)
+    throw new Error(`[LLM] Cannot reach service at ${REVERSE_ENDPOINT} — ${detail}`)
   }
-
-  const { raw_output, error } = response.data
-
-  if (error)      throw new Error(`[LLM] Service returned error: ${error}`)
-  if (!raw_output) throw new Error("[LLM] Service returned empty raw_output")
-
-  return raw_output
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// JSON PARSER
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Parse raw LLM output into a JavaScript object.
- * Handles cases where the LLM wraps JSON inside a markdown code block.
- */
+// ─────────────────────────────────────────────
+// PARSER
+// ─────────────────────────────────────────────
 function parseWorkflowJSON(raw) {
   if (typeof raw !== "string" || !raw.trim()) {
-    throw new Error("LLM output is empty or not a string")
+    throw new Error("LLM output invalid")
   }
+
   const cleaned = raw
     .replace(/^```json\s*/i, "")
-    .replace(/^```\s*/,      "")
-    .replace(/```\s*$/,      "")
+    .replace(/^```\s*/, "")
+    .replace(/```\s*$/, "")
     .trim()
+
   return JSON.parse(cleaned)
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// RETRY LOOP
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// MAIN RETRY LOOP
+// ─────────────────────────────────────────────
+async function generateWithRetry({
+  workflow_id,
+  workflow_name,
+  graphContext,
+  maxRetries = 3
+}) {
 
-/**
- * Generate a Shuffle Workflow JSON with automatic retry.
- *
- * Pipeline per attempt:
- *   1. Call Python LLM service → raw JSON string
- *   2. Parse JSON
- *   3. Level A + B validation (structural + semantic/Neo4j)
- *   4. Level C: import to Shuffle
- *      → Success : return result — done
- *      → Failure : forward errors to next attempt via retryContext
- *
- * @param {string} workflow_id    - Source workflow ID
- * @param {string} workflow_name  - Source workflow name
- * @param {number} maxRetries     - Max attempts (default: 3)
- */
-async function generateWithRetry(workflow_id, workflow_name, maxRetries = 3) {
   let lastValidation = null
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    console.log(`[LLM] Attempt ${attempt}/${maxRetries} — calling Python LLM service...`)
+  // ─────────────────────────────────────────────
+  // BUILD PROMPT ONCE
+  // ─────────────────────────────────────────────
+  const promptObject = buildReverseWorkflowPrompt({
+    workflow_id,
+    workflow_name,
+    graphContext
+  })
 
-    // ── Step 1: Call LLM ─────────────────────────────────────────────
+  const prompt = JSON.stringify(promptObject, null, 2)
+
+  // // ─────────────────────────────────────────────
+  // // DEBUG: SAVE PROMPT
+  // // ─────────────────────────────────────────────
+  // saveDebugJSON(
+  //   `prompt-${workflow_id}-${Date.now()}.json`,
+  //   {
+  //     workflow_id,
+  //     workflow_name,
+  //     graphContext,
+  //     prompt: promptObject
+  //   }
+  // )
+
+  // ─────────────────────────────────────────────
+  // RETRY LOOP
+  // ─────────────────────────────────────────────
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+
+    console.log(`[LLM] Attempt ${attempt}/${maxRetries}`)
+
     let raw
+
     try {
-      raw = await callLLM(workflow_id, workflow_name, lastValidation)
-    } catch (callError) {
-      console.warn(`[LLM] Call failed (attempt ${attempt}):`, callError.message)
+      raw = await callLLM(prompt, lastValidation)
+    } catch (err) {
+
+      console.warn("[LLM] Call failed:", err.message)
+
       lastValidation = {
-        errors: [{ code: "LLM_CALL_ERROR", location: "llm_service", message: callError.message }],
-        attempt,
+        errors: [{
+          code: "LLM_CALL_ERROR",
+          location: "llm_service",
+          message: err.message
+        }],
+        attempt
       }
-      if (attempt === maxRetries) break
+
       continue
     }
 
-    // ── Step 2: Parse JSON ────────────────────────────────────────────
     let workflow
+
     try {
       workflow = parseWorkflowJSON(raw)
-    } catch (parseError) {
-      console.warn(`[LLM] JSON parse failed (attempt ${attempt}):`, parseError.message)
+    } catch (err) {
+
+      console.warn("[LLM] JSON parse failed:", err.message)
+
       lastValidation = {
-        errors: [{ code: "INVALID_JSON", location: "root", message: parseError.message }],
-        attempt,
+        errors: [{
+          code: "INVALID_JSON",
+          location: "root",
+          message: err.message
+        }],
+        attempt
       }
-      if (attempt === maxRetries) break
+
       continue
     }
 
-    // ── Step 3: Validate Level A + B ─────────────────────────────────
+    // ─────────────────────────────────────────────
+    // VALIDATION
+    // ─────────────────────────────────────────────
     const validation = await validateWorkflow(workflow)
+
     if (!validation.valid) {
-      console.warn(
-        `[LLM] Validation failed — ${validation.errors.length} error(s):`,
-        validation.errors.map(e => `[${e.code}] ${e.location}`).join(", ")
-      )
+      console.warn("[LLM] Validation failed:", validation.errors.length)
+
       lastValidation = { ...validation, attempt }
-      if (attempt === maxRetries) break
       continue
     }
 
-    // ── Step 4: Level C — Import to Shuffle ──────────────────────────
-    console.log("[LLM] Validation passed — attempting Shuffle import...")
+    // ─────────────────────────────────────────────
+    // IMPORT TO SHUFFLE
+    // ─────────────────────────────────────────────
     try {
       const importResult = await importWorkflowToShuffle(workflow)
-      console.log(`[LLM] ✅ Import successful — ID: ${importResult.id} (attempt ${attempt})`)
-      return { workflow, importResult, attempts: attempt }
-    } catch (importError) {
-      console.warn("[LLM] Import failed:", importError.message)
-      lastValidation = { ...buildImportError(importError.message), attempt }
-      if (attempt === maxRetries) break
-      continue
+
+      console.log("[LLM] Import success:", importResult.id)
+
+      return {
+        workflow,
+        importResult,
+        attempts: attempt
+      }
+
+    } catch (err) {
+
+      console.warn("[LLM] Import failed:", err.message)
+
+      lastValidation = {
+        ...buildImportError(err.message),
+        attempt
+      }
     }
   }
 
-  // ── All attempts exhausted ────────────────────────────────────────
-  const summary = (lastValidation?.errors ?? [])
+  // ─────────────────────────────────────────────
+  // FINAL ERROR
+  // ─────────────────────────────────────────────
+  const summary = (lastValidation?.errors || [])
     .map(e => `[${e.code}] ${e.location}: ${e.message}`)
     .join("\n  ")
 
   throw new Error(
-    `Failed to generate valid workflow after ${maxRetries} attempt(s).\n` +
-    `Last errors:\n  ${summary || "Unknown"}`
+    `Failed to generate workflow after ${maxRetries} attempts\n` +
+    (summary || "Unknown error")
   )
 }
 
-module.exports = { callLLM, generateWithRetry }
+module.exports = {
+  callLLM,
+  generateWithRetry
+}

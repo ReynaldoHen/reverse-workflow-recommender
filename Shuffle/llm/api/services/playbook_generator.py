@@ -10,12 +10,13 @@ from typing import Any, Dict, List, Optional
 
 from neo4j import AsyncGraphDatabase
 
-from ..config import settings
+from ..config import settings, get_settings
 settings = get_settings()
 from .llm import llm                          # Ollama client
 from .shuffle_translator import shuffle_translator
 from .app_registry import app_registry
 from . import retrieval                       # Hybrid search (BGE-M3 + reranker)
+from .graph_retrieval import graph_retrieval
 
 logger = logging.getLogger(__name__)
 
@@ -85,30 +86,28 @@ async def _get_workflow_graph(workflow_id: str) -> List[Dict[str, Any]]:
 
     Node.js graphBuilder.js membuat:
       (:Action {workflow_id, id, name, app_name, app_id, app_version, large_image, position})
-      -[:NEXT {condition}]->(:Action)
+      -[:CONNECTS_TO {condition}]->(:Action)
     """
     driver = AsyncGraphDatabase.driver(
         settings.neo4j_uri,
         auth=settings.neo4j_auth,   # property: (neo4j_username, neo4j_password)
     )
     query = """
-        MATCH (a:Action)
-        WHERE a.workflow_id = $workflow_id
-        OPTIONAL MATCH (a)-[r]->(b:Action)
-        WHERE b.workflow_id = $workflow_id
+        MATCH (w:Workflow {id: $workflow_id})-[:CONTAINS]->(a:Action)
+        OPTIONAL MATCH (a)-[r:CONNECTS_TO]->(b:Action)
         RETURN
-            a.id          AS id,
-            a.name        AS name,
-            a.app_name    AS app_name,
-            a.app_id      AS app_id,
+            a.id AS id,
+            a.name AS name,
+            a.app_name AS app_name,
+            a.app_id AS app_id,
             a.app_version AS app_version,
             a.large_image AS large_image,
             a.description AS description,
             collect({
-                rel_type:    type(r),
-                target_id:   b.id,
+                rel_type: type(r),
+                target_id: b.id,
                 target_name: b.name,
-                condition:   r.condition
+                condition: r.condition
             }) AS transitions
         ORDER BY a.position
     """
@@ -138,6 +137,7 @@ def _build_reverse_system_prompt(
     graph_records: List[Dict[str, Any]],
     rag_examples: List[str],
     retry_context: Optional[Any],
+    graph_context: List[Dict[str, Any]] = None,
 ) -> str:
     """Bangun system prompt untuk Ollama: graph context + RAG examples + retry errors."""
 
@@ -224,7 +224,6 @@ RULES:
 - Hanya JSON murni — tidak ada teks tambahan di luar JSON.
 
 {graph_section}
-
 {rag_section}
 {retry_section}"""
 
@@ -256,12 +255,12 @@ async def generate_reverse_from_graph(
     )
 
     # 1. Ambil workflow graph dari Neo4j
-    logger.debug("[playbook_generator] Querying Neo4j for workflow_id=%s", workflow_id)
     graph_records = await _get_workflow_graph(workflow_id)
-    logger.info("[playbook_generator] Loaded %d Action nodes from Neo4j", len(graph_records))
 
-    # 2. RAG retrieval — cari playbook serupa sebagai contoh format
-    rag_examples: List[str] = []
+    # 2. RAG retrieval
+    rag_examples = []
+    graph_context = []
+
     try:
         rag_results = await retrieval.hybrid_search(
             query=f"reverse response workflow {workflow_name}",
@@ -269,24 +268,28 @@ async def generate_reverse_from_graph(
             db=db,
         )
         rag_examples = [r.get("content", "") for r in rag_results if r.get("content")]
-        logger.info("[playbook_generator] RAG returned %d examples", len(rag_examples))
     except Exception as rag_err:
-        # RAG opsional — pipeline tetap jalan tanpa contoh
-        logger.warning("[playbook_generator] RAG retrieval failed (skipped): %s", rag_err)
+        logger.warning("[RAG] failed: %s", rag_err)
 
-    # 3. Build prompt
-    system_prompt = _build_reverse_system_prompt(graph_records, rag_examples, retry_context)
-    user_prompt   = (
-        f'Generate a complete reverse workflow JSON for the workflow named: "{workflow_name}". '
-        "Return only the JSON object."
+    # 3. GRAPH CONTEXT (HARUS DI SINI)
+    try:
+        graph_context = await graph_retrieval.get_action_context(workflow_id)
+    except Exception as graph_err:
+        logger.warning("[GRAPH] failed: %s", graph_err)
+
+    # 4. BUILD GRAPH REASONING
+    graph_reasoning = ""
+
+    if graph_context:
+        graph_reasoning = "\nGRAPH CONTEXT (dependency + role awareness):\n" + "\n".join([
+            f"- {g.get('label')} | role={g.get('role')} | app={g.get('app')} | next={g.get('next_actions')}"
+            for g in graph_context
+        ])
+
+    # 5. PROMPT BUILD
+    system_prompt = _build_reverse_system_prompt(
+        graph_records,
+        rag_examples,
+        retry_context,
+        graph_context
     )
-
-    # 4. Panggil Ollama via llm.complete_json() — sama seperti forward pipeline
-    logger.info("[playbook_generator] Calling Ollama (model=%s)...", settings.OLLAMA_MODEL)
-    result_dict = await llm.complete_json(user_prompt, system=system_prompt)
-
-    if not result_dict:
-        raise ValueError("Ollama returned an empty response")
-
-    # Kembalikan sebagai JSON string — Node.js akan JSON.parse() hasilnya
-    return json.dumps(result_dict, ensure_ascii=False)
