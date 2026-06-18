@@ -90,136 +90,6 @@ services:
       - platform
     restart: unless-stopped
 
-
-  # =========================
-  # REVERSE WORKFLOW SERVICE (Node.js)
-  # Neo4j: pakai Neo4j Aura (cloud) — dibaca dari .env (NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD)
-  # Step 1-4 : parse → buildGraph → saveGraphToNeo4j (Aura)
-  # Step 5   : POST http://llm-api:8000/generate/reverse
-  # Step 6-8 : validate → importWorkflowToShuffle
-  # =========================
-  reverse-workflow-service:
-    build:
-      context: ./reverse-workflow-service
-    container_name: reverse-workflow-service
-    ports:
-      - "5005:5005"
-    env_file: .env   # membaca NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD, SHUFFLE_API_KEY, dll
-    environment:
-      - LLM_API_URL=http://llm-api:8000       # Python LLM service (Step 5)
-      - SHUFFLE_URL=${SHUFFLE_URL:-http://host.docker.internal:3000}  # untuk importWorkflowToShuffle
-    depends_on:
-      - llm-api
-    networks:
-      - platform
-    restart: unless-stopped
-
-
-  # =========================
-  # LLM POSTGRES
-  # =========================
-  postgres:
-    image: postgres:16
-    container_name: playbook-postgres
-    environment:
-      POSTGRES_USER: playbook
-      POSTGRES_PASSWORD: playbook
-      POSTGRES_DB: playbooks
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    networks:
-      - platform
-    restart: unless-stopped
-
-
-  # =========================
-  # VECTOR DB
-  # =========================
-  qdrant:
-    image: qdrant/qdrant:latest
-    container_name: playbook-qdrant
-    volumes:
-      - qdrant_data:/qdrant/storage
-    networks:
-      - platform
-    restart: unless-stopped
-
-
-  # =========================
-  # OLLAMA (LLM ENGINE)
-  # =========================
-  ollama:
-    image: ollama/ollama:latest
-    container_name: playbook-ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    networks:
-      - platform
-    restart: unless-stopped
-
-
-  # =========================
-  # LLM API (PLAYBOOK SYSTEM)
-  # Neo4j: pakai Neo4j Aura (cloud) — dibaca dari .env (NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD)
-  # POST /generate/playbook  — forward pipeline (NL → Shuffle JSON)
-  # POST /generate/reverse   — reverse pipeline (Neo4j Aura graph → Shuffle JSON)
-  # =========================
-  llm-api:
-    build: ./llm
-    container_name: playbook-api
-    env_file: .env   # membaca NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD, OLLAMA_HOST, LLM_MODEL, dll
-    depends_on:
-      - postgres
-      - qdrant
-      - ollama
-    ports:
-      - "8000:8000"
-    networks:
-      - platform
-    restart: unless-stopped
-
-
-  # =========================
-  # LLM UI
-  # =========================
-  llm-ui:
-    image: nginx:alpine
-    container_name: playbook-ui
-    volumes:
-      - ./llm/ui:/usr/share/nginx/html:ro
-    ports:
-      - "8080:80"
-    depends_on:
-      - llm-api
-    networks:
-      - platform
-    restart: unless-stopped
-
-
-  # =========================
-  # OPTIONAL MONITORING
-  # =========================
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: playbook-prometheus
-    profiles: ["monitoring"]
-    ports:
-      - "9090:9090"
-    networks:
-      - platform
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: playbook-grafana
-    profiles: ["monitoring"]
-    ports:
-      - "3333:3333"
-    networks:
-      - platform
-
-
 # =========================
 # VOLUMES
 # =========================
@@ -234,6 +104,10 @@ volumes:
 # =========================
 # NETWORK
 # =========================
+# networks:
+#   platform:
+#     driver: bridge
 networks:
   platform:
-    driver: bridge
+    external: true
+    name: shared-platform
