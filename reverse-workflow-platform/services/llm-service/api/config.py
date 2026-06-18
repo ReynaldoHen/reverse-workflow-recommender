@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     llm_model: str = "llama3.1:8b"
     llm_temperature: float = 0.1
     llm_max_retries: int = 3
+    # Read timeout for a single Ollama generation call (seconds).
+    # llama3.1:8b on CPU can take 5–15 min for a complex prompt.
+    # Override via OLLAMA_READ_TIMEOUT in .env — set lower if you have GPU.
+    ollama_read_timeout: int = 900
 
     # Neo4j Aura (dibaca dari .env: NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD, NEO4J_DATABASE)
     neo4j_uri: str = ""

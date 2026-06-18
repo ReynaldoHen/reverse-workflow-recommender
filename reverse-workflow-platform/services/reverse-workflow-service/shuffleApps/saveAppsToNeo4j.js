@@ -71,9 +71,9 @@ async function saveAppsToNeo4j(apps) {
         // RELATION: APP -> ACTION
         await session.run(
           `
-          MATCH (app:APP {app_id: $app_id})
+          MATCH (APP:APP {app_id: $app_id})
           MATCH (act:ACTION_TEMPLATE {action_key: $key})
-          MERGE (app)-[:HAS_ACTION]->(act)
+          MERGE (APP)-[:HAS_ACTION]->(act)
           `,
           {
             app_id: app.id,

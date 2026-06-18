@@ -100,7 +100,9 @@ function validateStructure(workflow) {
       app_id:      "Application ID from Neo4j, e.g. 'a86a53b9a463ceace67bb62eb2a9dab4'",
       id:          "Unique UUID v4 for this action, e.g. '4a183af7-7cf2-4ce9-a008-a931c7cf4ff6'",
       label:       "Display name on the Shuffle canvas, e.g. 'Check_Domain_Reputation'",
-      large_image: "Application logo (base64) from Neo4j for this app_id. Do not generate this value yourself.",
+      // large_image is intentionally excluded here — it is injected server-side
+      // after LLM generation (Python fills it from graph_records by app_id).
+      // Level B (semantic) still verifies the injected value matches Neo4j.
       name:        "Valid action name from Neo4j, e.g. 'get_comments_on_a_domain'",
     }
 
@@ -325,8 +327,8 @@ async function validateSemantic(workflow) {
       if (!a.name) continue
 
       const actRes = await session.run(
-        `MATCH (app:APP {app_id: $app_id})-[:HAS_ACTION]->(act:ACTION_TEMPLATE {action_name: $action_name})
-         RETURN act.action_name AS action_name`,
+        `MATCH (APP:APP {app_id: $app_id})-[:HAS_ACTION]->(act:ACTION_TEMPLATE {name: $action_name})
+         RETURN act.name AS action_name`,
         { app_id: a.app_id, action_name: a.name }
       )
 
@@ -334,8 +336,8 @@ async function validateSemantic(workflow) {
 
         // fetch valid action examples to help the LLM self-correct
         const exRes = await session.run(
-          `MATCH (app:APP {app_id: $app_id})-[:HAS_ACTION]->(act:ACTION_TEMPLATE)
-           RETURN act.action_name AS action_name
+          `MATCH (APP:APP {app_id: $app_id})-[:HAS_ACTION]->(act:ACTION_TEMPLATE)
+           RETURN act.name AS action_name
            LIMIT 5`,
           { app_id: a.app_id }
         )

@@ -20,8 +20,17 @@ class LLM:
             "stream": False,
             "options": {"temperature": settings.llm_temperature if temperature is None else temperature},
         }
-        async with httpx.AsyncClient(timeout=120) as client:
-            resp = await client.post(self._url, json=payload)
+        # IMPORTANT: do NOT pass timeout= to AsyncClient() — it conflicts with
+        # the per-request Timeout below and whichever is smaller wins silently.
+        # Drive everything from one explicit Timeout object on the request only.
+        timeout = httpx.Timeout(
+            connect=10.0,
+            read=float(settings.ollama_read_timeout),
+            write=30.0,
+            pool=10.0,
+        )
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(self._url, json=payload, timeout=timeout)
             resp.raise_for_status()
             return resp.json().get("response", "")
 
@@ -41,6 +50,5 @@ class LLM:
                     except json.JSONDecodeError:
                         continue
         raise ValueError(f"LLM did not return valid JSON after retries: {last_err}")
-
 
 llm = LLM()

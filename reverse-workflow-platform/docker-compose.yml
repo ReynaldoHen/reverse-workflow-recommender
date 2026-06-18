@@ -84,6 +84,11 @@ services:
       SHUFFLE_API_KEY: ${SHUFFLE_API_KEY:-}
     ports:
       - "8000:8000"
+    volumes:
+      # Persist downloaded embedding/reranker models across image rebuilds &
+      # container recreation — without this, every rebuild re-downloads
+      # BAAI/bge-m3 + BAAI/bge-reranker-v2-m3 (~GBs) from HuggingFace Hub.
+      - huggingface_cache:/root/.cache/huggingface
     networks:
     - platform
     depends_on:
@@ -178,6 +183,7 @@ volumes:
   pg_data:
   qdrant_data:
   ollama_models:
+  huggingface_cache:
 
 networks:
   platform:

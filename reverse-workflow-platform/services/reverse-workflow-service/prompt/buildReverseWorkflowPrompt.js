@@ -2,7 +2,6 @@ function buildReverseWorkflowPrompt({
   workflow = {},
   nodes = [],
   relationships = [],
-  appCatalog = []
 }) {
   return {
     system: `
@@ -29,7 +28,7 @@ Your job:
         relationships
       },
 
-      app_catalog: appCatalog
+      resolved_apps = await app_registry.get_map()
     },
 
     output_format: {

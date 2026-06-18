@@ -8,12 +8,12 @@ async function getWorkflowContext(workflowId) {
       `
         MATCH (w:WORKFLOW {workflow_id: $workflowId})
         OPTIONAL MATCH (w)-[:CONTAINS]->(a:ACTION)
-        OPTIONAL MATCH (a)-[:USES_APP]->(app:APP)
+        OPTIONAL MATCH (a)-[:USES_APP]->(APP:APP)
 
         RETURN 
-        w AS workflow,
+        w AS WORKFLOW,
         collect(DISTINCT a) AS nodes,
-        collect(DISTINCT app) AS apps
+        collect(DISTINCT APP) AS apps
       `,
       { workflowId }
     )
@@ -26,7 +26,7 @@ async function getWorkflowContext(workflowId) {
     }
 
     return {
-      workflow: record.get("workflow")?.properties || {},
+      workflow: record.get("WORKFLOW")?.properties || {},
       nodes: record.get("nodes").map(n => n.properties),
       appCatalog: record.get("apps").map(a => a.properties),
       relationships: []

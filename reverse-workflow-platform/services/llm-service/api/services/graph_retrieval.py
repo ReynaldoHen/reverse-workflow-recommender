@@ -28,24 +28,24 @@ class GraphRetrieval:
     async def get_action_context(self, workflow_id: str) -> List[Dict[str, Any]]:
         """
         Mengambil contextual graph view:
-        - action
+        - ACTION
         - role inference
         - next actions
-        - app relationship
+        - APP relationship
         """
 
         query = """
-        MATCH (a:Action {workflow_id: $workflow_id})
-        OPTIONAL MATCH (a)-[r:NEXT]->(b:Action)
-        OPTIONAL MATCH (a)-[:USES_APP]->(app:App)
+        MATCH (a:ACTION {workflow_id: $workflow_id})
+        OPTIONAL MATCH (a)-[r:NEXT]->(b:ACTION)
+        OPTIONAL MATCH (a)-[:USES_APP]->(app:APP)
         RETURN
-            a.id AS id,
-            a.name AS name,
+            a.action_id AS id,
+            a.label AS name,
             a.app_id AS app_id,
             app.app_name AS app_name,
             collect({
-                target_id: b.id,
-                target_name: b.name,
+                target_id: b.action_id,
+                target_name: b.label,
                 condition: r.condition
             }) AS next_actions
         """
