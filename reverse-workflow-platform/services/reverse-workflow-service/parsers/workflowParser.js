@@ -11,7 +11,7 @@ const parseWorkflow = (actions, branches) => {
   const nodes = actions.map((action) => {
     return {
       id: safe(action.id),
-      label: safe(action.label, action.name), // fallback penting
+      label: safe(action.label, action.name),
       app_name: safe(action.app_name),
       action_name: safe(action.action_name || action.name),
       category: safe(action.category),

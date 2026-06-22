@@ -1,3 +1,5 @@
+const { resolveReverse } = require("../config/reverseMap")
+
 const inferRole = (node) => {
   const name = (node.label || node.action_name || "").toLowerCase()
 
@@ -5,12 +7,6 @@ const inferRole = (node) => {
   if (name.includes("block") || name.includes("quarantine")) return "RESPONSE"
   if (name.includes("scan") || name.includes("check") || name.includes("lookup")) return "ANALYSIS"
   return "ENRICHMENT"
-}
-
-// APP node id standardization (IMPORTANT for Neo4j consistency)
-const makeAppNodeId = (app_id) => {
-  if (!app_id) return null
-  return `APP_${app_id}`
 }
 
 const buildGraph = (parsedWorkflow, workflowId, workflowName) => {
@@ -43,6 +39,7 @@ const buildGraph = (parsedWorkflow, workflowId, workflowName) => {
   parsedWorkflow.nodes.forEach((node) => {
 
     const role = inferRole(node)
+    const actionName = node.action_name || node.label || ""
 
     // ─────────────────────────────
     // ACTION NODE
@@ -52,6 +49,7 @@ const buildGraph = (parsedWorkflow, workflowId, workflowName) => {
       type: "ACTION",
       properties: {
         action_id: node.id,
+        workflow_id: workflowId,
         label: node.label || node.action_name || "",
         app_name: node.app_name || "",
         action_name: node.action_name || "",
@@ -65,15 +63,13 @@ const buildGraph = (parsedWorkflow, workflowId, workflowName) => {
     })
 
     // ─────────────────────────────
-    // WORKFLOW → ACTION (IMPORTANT RELATION)
+    // WORKFLOW → ACTION
     // ─────────────────────────────
     graph.relationships.push({
       source: workflowId,
       target: node.id,
       type: "CONTAINS",
-      properties: {
-        label: "workflow_contains_action"
-      }
+      properties: { label: "workflow_contains_action" }
     })
 
     // ─────────────────────────────
@@ -84,18 +80,43 @@ const buildGraph = (parsedWorkflow, workflowId, workflowName) => {
         source: node.id,
         target: node.app_id,
         type: "USES_APP",
-        properties: {
-          app_name: node.app_name || ""
-        }
+        properties: { app_name: node.app_name || "" }
       })
     }
+
+    // ─────────────────────────────
+    // REVERSE_ACTION NODE + HAS_REVERSE (pemetaan reverse eksplisit di graph)
+    // ─────────────────────────────
+    const rev = resolveReverse(actionName, node.app_name || "")
+    const revId = `REV_${node.id}`
+
+    graph.nodes.push({
+      id: revId,
+      type: "REVERSE_ACTION",
+      properties: {
+        rev_id: revId,
+        source_action_id: node.id,
+        source_action_name: actionName,
+        reverse_action_name: rev.reverse_action_name,
+        app_name: node.app_name || "",
+        app_id: node.app_id || "",
+        status: rev.status,           // auto_mapped | needs_llm | requires_manual_review
+        reason: rev.reason
+      },
+    })
+
+    graph.relationships.push({
+      source: node.id,
+      target: revId,
+      type: "HAS_REVERSE",
+      properties: { status: rev.status }
+    })
   })
 
   // ─────────────────────────────
   // EDGE RELATIONSHIPS (FLOW LOGIC)
   // ─────────────────────────────
   parsedWorkflow.edges.forEach((edge) => {
-
     graph.relationships.push({
       source: edge.source,
       target: edge.target,

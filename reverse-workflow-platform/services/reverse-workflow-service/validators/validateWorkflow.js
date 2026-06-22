@@ -21,8 +21,14 @@ const CODE = {
   INVALID_APP_ID:           "INVALID_APP_ID",
   APP_FIELD_MISMATCH:       "APP_FIELD_MISMATCH",
   INVALID_ACTION_NAME:      "INVALID_ACTION_NAME",
+  REVERSE_MAPPING_MISMATCH: "REVERSE_MAPPING_MISMATCH",
   // import
   SHUFFLE_IMPORT_ERROR:     "SHUFFLE_IMPORT_ERROR",
+}
+
+// Normalisasi nama action agar cocok dengan kamus reverse (lowercase, spasi/hyphen -> underscore).
+function normalizeName(name) {
+  return String(name || "").trim().toLowerCase().replace(/[\s-]+/g, "_")
 }
 
 // ─────────────────────────────────────────────
@@ -363,6 +369,57 @@ async function validateSemantic(workflow) {
 }
 
 // ─────────────────────────────────────────────
+// LEVEL C — RULE-BASED REVERSE MAPPING CHECK
+// Memverifikasi (berbasis aturan, bukan menjamin makna) bahwa setiap reverse
+// action yang dipetakan otomatis (status=auto_mapped) benar-benar muncul di
+// workflow hasil generate. Action ber-status requires_manual_review TIDAK
+// diwajibkan — cukup ditandai untuk peninjauan analis.
+// ─────────────────────────────────────────────
+
+async function validateReverseMapping(workflow, workflowId) {
+  const errors  = []
+  if (!workflowId) return errors
+
+  const session = driver.session()
+  try {
+    const res = await session.run(
+      `MATCH (a:ACTION {workflow_id: $workflowId})-[:HAS_REVERSE]->(r:REVERSE_ACTION)
+       WHERE r.status = 'auto_mapped' AND r.reverse_action_name <> ''
+       RETURN DISTINCT r.reverse_action_name AS expected`,
+      { workflowId }
+    )
+
+    const expected = res.records.map(r => normalizeName(r.get("expected")))
+    if (expected.length === 0) return errors
+
+    const present = new Set(
+      (workflow.actions || []).map(a => normalizeName(a.name))
+    )
+
+    for (const exp of expected) {
+      if (!present.has(exp)) {
+        errors.push(err("semantic", CODE.REVERSE_MAPPING_MISMATCH, "actions",
+          `Reverse action '${exp}' yang dipetakan otomatis tidak ditemukan pada workflow hasil`,
+          `Sertakan action dengan name '${exp}' sesuai pemetaan HAS_REVERSE di Neo4j`,
+          [...present].join(", ")
+        ))
+      }
+    }
+  } finally {
+    await session.close()
+  }
+
+  return errors
+}
+
+// Kumpulkan action yang ditandai requires_manual_review (human review flag).
+function collectReviewRequired(workflow) {
+  return (workflow.actions || [])
+    .filter(a => a && a.requires_manual_review === true)
+    .map(a => ({ id: a.id || null, name: a.name || null }))
+}
+
+// ─────────────────────────────────────────────
 // CORRECTION INSTRUCTIONS
 // ─────────────────────────────────────────────
 
@@ -384,6 +441,9 @@ function buildCorrectionInstructions(errors) {
 
   if (codes.includes(CODE.INVALID_ACTION_NAME))
     lines.push("- The 'name' field in each action MUST use a valid action name from the Action Knowledge Graph that corresponds to the action's app_id.")
+
+  if (codes.includes(CODE.REVERSE_MAPPING_MISMATCH))
+    lines.push("- Setiap source action yang punya pemetaan reverse otomatis (HAS_REVERSE, status auto_mapped) WAJIB menghasilkan action dengan 'name' sama persis dengan reverse_action_name pada pemetaan. Jangan menyalin action sumber apa adanya.")
 
   if (codes.includes(CODE.MISSING_START_NODE) ||
       codes.includes(CODE.MULTIPLE_START_NODES))
@@ -414,7 +474,7 @@ function buildCorrectionInstructions(errors) {
  * Level C (import) is executed inside llmService
  * and converted to the same error format on failure.
  */
-async function validateWorkflow(workflow) {
+async function validateWorkflow(workflow, workflowId = null) {
 
   // ── Level A ───────────────────────────────
   const structuralErrors = validateStructure(workflow)
@@ -438,7 +498,19 @@ async function validateWorkflow(workflow) {
     }
   }
 
-  return { valid: true, errors: [] }
+  // ── Level C — rule-based reverse mapping check ──
+  const mappingErrors = await validateReverseMapping(workflow, workflowId)
+
+  if (mappingErrors.length > 0) {
+    return {
+      valid:                   false,
+      errors:                  mappingErrors,
+      correction_instructions: buildCorrectionInstructions(mappingErrors),
+    }
+  }
+
+  // valid — sertakan daftar action yang perlu peninjauan analis (human review flag)
+  return { valid: true, errors: [], review_required: collectReviewRequired(workflow) }
 }
 
 /**

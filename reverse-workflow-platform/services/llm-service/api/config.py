@@ -17,17 +17,6 @@ class Settings(BaseSettings):
     postgres_host: str = "postgres"
     postgres_port: int = 5432
 
-    # Vector store
-    qdrant_host: str = "qdrant"
-    qdrant_port: int = 6333
-    qdrant_collection: str = "playbooks"
-
-    # Models
-    embedding_model: str = "BAAI/bge-m3"
-    reranker_model: str = "BAAI/bge-reranker-v2-m3"
-    embedding_dim: int = 1024
-    enable_reranker: bool = True
-
     # LLM (Ollama)
     ollama_host: str = "http://ollama:11434"
     llm_model: str = "llama3.1:8b"
@@ -38,7 +27,7 @@ class Settings(BaseSettings):
     # Override via OLLAMA_READ_TIMEOUT in .env — set lower if you have GPU.
     ollama_read_timeout: int = 900
 
-    # Neo4j Aura (dibaca dari .env: NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD, NEO4J_DATABASE)
+    # Neo4j lokal via Docker (dibaca dari .env: NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD, NEO4J_DATABASE)
     neo4j_uri: str = ""
     neo4j_username: str = ""
     neo4j_password: str = ""

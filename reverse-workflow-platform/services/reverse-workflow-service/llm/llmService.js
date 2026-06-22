@@ -18,9 +18,9 @@ const LOGIN_ENDPOINT   = `${LLM_API_URL}${LLM_API_PREFIX}/auth/login`
 const LLM_AUTH_USER = process.env.LLM_AUTH_USER || "admin"
 const LLM_AUTH_PASS = process.env.LLM_AUTH_PASS || "admin"
 
-// Worst case on the Python side: embedder/reranker model load (cold) +
-// Qdrant search + Ollama generation (up to 900s by default for CPU inference,
-// see config.py OLLAMA_READ_TIMEOUT). Add ~60s overhead for the Python layer.
+// Worst case on the Python side: Neo4j graph query + Ollama generation
+// (up to 900s by default for CPU inference, see config.py OLLAMA_READ_TIMEOUT).
+// Add ~60s overhead for the Python layer.
 // Configurable so it can be tuned per-environment without another code change.
 const LLM_CALL_TIMEOUT_MS = parseInt(process.env.LLM_CALL_TIMEOUT_MS || "960000", 10) // 960 detik atau 16 menit
 
@@ -195,7 +195,7 @@ async function generateWithRetry({
       continue
     }
 
-    const validation = await validateWorkflow(workflow)
+    const validation = await validateWorkflow(workflow, workflow_id)
     if (!validation.valid) {
       console.warn("[LLM] VALIDATION FAILED — ERRORS:", JSON.stringify(validation.errors, null, 2))
       lastValidation = validation
@@ -206,7 +206,7 @@ async function generateWithRetry({
       const importResult = await importWorkflowToShuffle(workflow)
       console.log("[LLM] IMPORT SUCCESS:", importResult.id)
 
-      return { workflow, importResult, attempts: attempt }
+      return { workflow, importResult, attempts: attempt, review_required: validation.review_required || [] }
 
     } catch (err) {
       console.error("[LLM] IMPORT FAILED:", err.message)

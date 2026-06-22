@@ -3,7 +3,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from ..auth import current_user, authenticate, create_token
 from ..schemas import (LoginRequest, TokenResponse, FeedbackRequest)
 from ..database import get_db, Playbook, Feedback
-from ..services.retrieval import retrieval
 from ..services.shuffle_client import shuffle_client
 
 router = APIRouter(tags=["other"])
@@ -33,9 +32,6 @@ async def add_playbook(payload: dict, db=Depends(get_db), user: str = Depends(cu
         shuffle_json=json.loads(json.dumps(payload.get("shuffle_json"))) if payload.get("shuffle_json") else None,
     )
     db.add(pb); db.commit()
-    await retrieval.index(pb.slug, pb.id, f"{pb.name}. {pb.description}",
-                          {"slug": pb.slug, "name": pb.name, "category": pb.category,
-                           "description": pb.description, "steps": pb.steps})
     return {"status": "ingested", "slug": pb.slug}
 
 

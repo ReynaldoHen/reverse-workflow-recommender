@@ -1,8 +1,7 @@
-"""Reverse pipeline: NL description -> LLM intermediate JSON -> Shuffle JSON.
+"""Reverse pipeline: query Neo4j graph (+ pemetaan HAS_REVERSE) -> bangun prompt
+berbasis pemetaan reverse -> Ollama -> raw Shuffle workflow JSON.
 
-If generation is not possible (no valid workflow after retries / no usable apps)
-or any error occurs, the caller is expected to invoke the Action Recommender.
-This module signals that by returning success=False with an error reason.
+Dipanggil oleh endpoint POST /generate/reverse. RAG/Qdrant sudah dihapus.
 """
 import json
 import logging
@@ -14,70 +13,9 @@ from neo4j import AsyncGraphDatabase
 from ..config import get_settings
 settings = get_settings()
 from .llm import llm                          # Ollama client
-from .shuffle_translator import shuffle_translator
-from .app_registry import app_registry
-from . import retrieval                       # Hybrid search (BGE-M3 + reranker)
-from .recommendation import recommender        # search + rerank, sama yang dipakai forward pipeline
 from .graph_retrieval import graph_retrieval
-from .reverse_context_builder import build
 
 logger = logging.getLogger(__name__)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# FORWARD PIPELINE — system prompt
-# ─────────────────────────────────────────────────────────────────────────────
-
-SYSTEM = (
-    "You design SOAR workflows. Convert the analyst's description into an "
-    "intermediate workflow JSON. Respond ONLY with JSON of the form: "
-    '{"name": str, "start": "n1", "nodes": [{"id": "n1", "APP": "virustotal", '
-    '"ACTION": "lookup_url", "parameters": {"url": "${url}"}}], '
-    '"edges": [{"from": "n1", "to": "n2", "conditions": []}]}. '
-    "Use only APP keys from the provided registry list."
-)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# FORWARD PIPELINE
-# ─────────────────────────────────────────────────────────────────────────────
-
-class PlaybookGenerator:
-    async def generate(self, description: str, target_integrations: list[str] | None = None) -> dict:
-        registry_keys = [a["name"] for a in app_registry.all()]
-        prompt = json.dumps({
-            "description": description,
-            "preferred_apps": target_integrations or [],
-            "available_app_keys": registry_keys,
-        })
-        try:
-            intermediate = await llm.complete_json(prompt, system=SYSTEM)
-        except Exception as exc:
-            return {"success": False, "error": f"LLM could not produce valid workflow JSON: {exc}"}
-
-        errors = shuffle_translator.validate_intermediate(intermediate)
-        if errors:
-            return {"success": False, "error": "Intermediate validation failed: " + "; ".join(errors),
-                    "intermediate": intermediate}
-
-        # If no node maps to a known app, treat generation as not possible.
-        known = [n for n in intermediate.get("nodes", [])
-                 if not app_registry.resolve(n.get("APP")).get("_synthetic")]
-        if not known:
-            return {"success": False,
-                    "error": "No requested integrations are available in the app registry.",
-                    "intermediate": intermediate}
-
-        shuffle_wf = shuffle_translator.translate(intermediate)
-        wf_errors = shuffle_translator.validate_shuffle(shuffle_wf)
-        if wf_errors:
-            return {"success": False, "error": "Shuffle validation failed: " + "; ".join(wf_errors),
-                    "intermediate": intermediate}
-
-        return {"success": True, "intermediate": intermediate, "shuffle_workflow": shuffle_wf}
-
-
-playbook_generator = PlaybookGenerator()
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # REVERSE PIPELINE — helpers
@@ -148,113 +86,143 @@ async def _get_workflow_graph(workflow_id: str) -> List[Dict[str, Any]]:
 
 def _build_reverse_system_prompt(
     graph_records: List[Dict[str, Any]],
-    rag_examples: List[str],
+    rev_by_id: Dict[str, Dict[str, Any]],
     retry_context: Optional[Any],
-    graph_context: List[Dict[str, Any]] = None,
 ) -> str:
-    """Bangun system prompt untuk Ollama: schema lengkap + concrete action table + retry errors."""
+    """Bangun system prompt reverse berbasis PEMETAAN (HAS_REVERSE), tanpa RAG.
 
-    # ── Concrete action data table ─────────────────────────────────────────
-    # LLM harus COPY nilai ini persis, bukan mengarang.
-    # Urutan tabel = urutan TERBALIK dari source (untuk reverse workflow).
+    Untuk tiap source action (urutan dibalik), prompt memberi tahu LLM reverse
+    action yang harus dikeluarkan sesuai status pemetaan:
+      - auto_mapped            -> keluarkan action name = reverse_action_name
+      - needs_llm              -> LLM menyimpulkan kebalikan; jika ragu, manual review
+      - requires_manual_review -> placeholder requires_manual_review=true (jangan mengarang)
+    """
     reversed_records = list(reversed(graph_records))
 
-    action_rows = []
-    for i, a in enumerate(reversed_records):
+    # Lewati action ber-status no_reverse_needed (read-only/utilitas) — tidak masuk output.
+    kept = []
+    skipped = []
+    for a in reversed_records:
+        rev = rev_by_id.get(a.get("id"), {}) or {}
+        if (rev.get("reverse_status") or "needs_llm") == "no_reverse_needed":
+            skipped.append(a.get("action_name") or a.get("name") or a.get("id"))
+        else:
+            kept.append(a)
+
+    rows = []
+    for i, a in enumerate(kept):
+        aid = a.get("id")
+        rev = rev_by_id.get(aid, {}) or {}
+        status = rev.get("reverse_status") or "needs_llm"
+        reverse_name = rev.get("reverse_action_name") or ""
+
+        if status == "auto_mapped" and reverse_name:
+            instruction = (
+                f"OUTPUT reverse action: name = '{reverse_name}' "
+                f"(requires_manual_review=false). Salin app_name/app_id/app_version "
+                f"dari source, pertahankan parameter yang relevan (mis. IP/user yang sama)."
+            )
+        elif status == "requires_manual_review":
+            reason = rev.get("reverse_reason") or "tidak ada pasangan pembalik"
+            instruction = (
+                f"TIDAK ADA reverse yang aman ({reason}). OUTPUT placeholder: "
+                f"name = 'manual_review_required', requires_manual_review=true. "
+                f"JANGAN mengarang aksi pembalik."
+            )
+        else:  # needs_llm
+            instruction = (
+                "TIDAK ada di kamus. Simpulkan aksi kebalikan yang paling tepat dari app "
+                "yang sama berdasarkan makna action sumber. Jika tidak yakin, set "
+                "requires_manual_review=true (jangan mengarang)."
+            )
+
         transitions_str = ", ".join(
             f"{t.get('target_name')} (cond: {t.get('condition') or 'always'})"
             for t in a.get("transitions", [])
         ) or "(terminal)"
 
-        action_rows.append(
-            f"  ACTION[{i+1}]\n"
+        rows.append(
+            f"  SOURCE_ACTION[{i+1}]\n"
+            f"    source_name = {a.get('action_name') or a.get('name') or ''}\n"
             f"    app_name    = {a.get('app_name') or '(unknown)'}\n"
             f"    app_id      = {a.get('app_id') or '(unknown)'}\n"
             f"    app_version = {a.get('app_version') or '(unknown)'}\n"
-            f"    action_name = {a.get('action_name') or a.get('name') or ''}\n"
-            f"    label       = {a.get('name') or ''}\n"
             f"    is_start    = {'true' if i == 0 else 'false'}\n"
-            f"    source_flow → {transitions_str}"
-            # large_image intentionally excluded — it is a large base64 blob
-            # that would inflate the prompt. Python injects the correct value
-            # from graph_records after generation (see _inject_large_images).
+            f"    source_flow → {transitions_str}\n"
+            f"    REVERSE     → {instruction}"
+        )
+
+    skip_note = ""
+    if skipped:
+        skip_note = (
+            "\n\nACTION YANG DILEWATI (read-only/utilitas, JANGAN dimasukkan ke output): "
+            + ", ".join(str(s) for s in skipped)
         )
 
     action_table = (
-        "SOURCE ACTIONS (SUDAH DIURUTKAN TERBALIK — ACTION[1] adalah start node reverse):\n"
-        + "\n".join(action_rows)
+        "REVERSE MAPPING TABLE (urutan SUDAH dibalik — SOURCE_ACTION[1] = start node reverse;\n"
+        "HANYA action di tabel ini yang boleh muncul di output):\n"
+        + "\n".join(rows)
+        + skip_note
     )
 
-    # ── RAG examples ──────────────────────────────────────────────────────
-    rag_section = (
-        "SIMILAR PLAYBOOK EXAMPLES (referensi format saja):\n"
-        + "\n---\n".join(rag_examples[:1])
-        if rag_examples
-        else ""
-    )
-
-    # ── Retry errors ───────────────────────────────────────────────────────
     retry_section = ""
     if retry_context and not retry_context.valid:
         error_lines = "\n".join(
-            f"  • [{e.code}] at {e.location}: {e.message}"
-            + (f"\n    expected: {e.expected}" if hasattr(e, 'expected') and e.expected else "")
-            + (f"\n    received: {e.received}" if hasattr(e, 'received') and e.received else "")
+            f"  • [{e.code}] di {e.location}: {e.message}"
             for e in retry_context.errors
         )
         retry_section = (
-            f"\n\nPREVIOUS ATTEMPT FAILED (attempt {retry_context.attempt}).\n"
-            f"Fix ALL errors below before answering:\n{error_lines}\n"
-            + (f"\nHINT: {retry_context.correction_instructions}"
+            f"\n\nATTEMPT SEBELUMNYA GAGAL (attempt {retry_context.attempt}).\n"
+            f"Perbaiki SEMUA error berikut sebelum menjawab:\n{error_lines}\n"
+            + (f"HINT: {retry_context.correction_instructions}"
                if retry_context.correction_instructions else "")
         )
 
     return f"""RESPOND WITH A JSON OBJECT ONLY. NO TEXT BEFORE OR AFTER. NO MARKDOWN. NO CODE FENCES.
 
-You are a SOAR Workflow Engineer. Generate a REVERSE workflow JSON for Shuffle SOAR.
+You are a SOAR Workflow Engineer. Generate a REVERSE (rollback) workflow JSON for Shuffle SOAR.
+For each source action you MUST output its mapped REVERSE action (see table), NOT a copy of the
+source action. The reverse workflow runs the inverse actions in reversed order.
 
 CRITICAL RULES — violations cause import failure:
-1. YOUR ENTIRE RESPONSE MUST BE A SINGLE JSON OBJECT. Start your response with {{ and end with }}.
-   Do NOT write "Here is...", do NOT use ``` fences, do NOT add any explanation.
-2. Every "id" in actions and branches MUST be a valid UUID v4 — format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
-   where x = hex digit [0-9a-f], the 3rd segment starts with 4, the 4th starts with 8/9/a/b.
-   VALID:   "a3f1c2d4-1234-4abc-8def-000000000001"
-   INVALID: "a1b2c3d4-e5f6-g7h8-i9j0-k0l1m2n3o4"  ← g/h/i/j/k letters are NOT valid hex
-3. app_name, app_id, app_version — COPY EXACTLY from the ACTION TABLE below.
-   Do NOT invent, modify, or leave these empty.
-4. large_image — always output exactly: "large_image": "" (empty string). It will be filled server-side.
-5. "name" field in each action — COPY the action_name value from the ACTION TABLE below.
-6. Exactly ONE action must have "is_start_node": true — this must be ACTION[1] in the table.
-7. All other actions must have "is_start_node": false.
-8. "execution_delay" must be 0 (integer) for every action.
-9. "branches" id fields must also be valid UUID v4 (not "branch1", "branch2", etc).
-10. NEVER create a branch where source_id or destination_id is empty or missing.
-    Terminal actions (last in the reversed flow) must NOT have any outgoing branch.
-    Only create a branch when you have BOTH a valid source action id AND a valid destination action id.
+1. RESPONSE = SATU JSON OBJECT. Mulai dengan {{ dan akhiri dengan }}. Tanpa teks/markdown/code fence.
+2. Setiap "id" di actions dan branches WAJIB UUID v4 (xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx).
+3. app_name, app_id, app_version — SALIN PERSIS dari source action pada tabel.
+4. large_image — selalu "" (akan diisi server-side).
+5. "name" tiap action — gunakan reverse action sesuai kolom REVERSE pada tabel (BUKAN source_name),
+   kecuali requires_manual_review=true → name = "manual_review_required".
+6. Tambahkan field "requires_manual_review": true/false pada SETIAP action sesuai instruksi tabel.
+7. Tepat SATU action punya "is_start_node": true → yaitu SOURCE_ACTION[1] di tabel.
+8. "execution_delay" = 0 (integer) untuk semua action.
+9. branches.id juga UUID v4; jangan buat branch dengan source_id/destination_id kosong.
+10. Terminal action (terakhir pada alur terbalik) tidak boleh punya outgoing branch.
+11. JANGAN membuat parameter baru di luar yang tersedia. JANGAN mengeksekusi rollback.
 
-OUTPUT SCHEMA (follow exactly):
+OUTPUT SCHEMA (ikuti persis):
 {{
-  "name": "<string — name of this reverse workflow>",
-  "description": "<string — what this reverse workflow does>",
-  "start": "<UUID — must equal the id you assigned to ACTION[1]>",
+  "name": "<string — nama reverse workflow>",
+  "description": "<string — apa yang dilakukan reverse workflow ini>",
+  "start": "<UUID — sama dengan id action untuk SOURCE_ACTION[1]>",
   "actions": [
     {{
-      "id": "<new UUID v4>",
-      "name": "<action_name from table>",
-      "app_name": "<app_name from table — copy exactly>",
-      "app_id": "<app_id from table — copy exactly>",
-      "app_version": "<app_version from table — copy exactly>",
+      "id": "<UUID v4 baru>",
+      "name": "<reverse action_name dari tabel, atau 'manual_review_required'>",
+      "app_name": "<app_name dari tabel — salin persis>",
+      "app_id": "<app_id dari tabel — salin persis>",
+      "app_version": "<app_version dari tabel — salin persis>",
       "large_image": "",
-      "label": "<label from table>",
-      "is_start_node": <true for ACTION[1] only, false for all others>,
+      "label": "<label singkat>",
+      "is_start_node": <true hanya untuk SOURCE_ACTION[1], selain itu false>,
       "execution_delay": 0,
+      "requires_manual_review": <true/false sesuai tabel>,
       "parameters": [{{"name": "<string>", "value": "<string>"}}],
       "position": {{"x": <number>, "y": <number>}}
     }}
   ],
   "branches": [
     {{
-      "id": "<new UUID v4>",
+      "id": "<UUID v4 baru>",
       "source_id": "<action id>",
       "destination_id": "<action id>",
       "condition": ""
@@ -263,8 +231,6 @@ OUTPUT SCHEMA (follow exactly):
 }}
 
 {action_table}
-
-{rag_section}
 {retry_section}
 REMINDER: output ONLY the JSON object. Do not write anything before {{ or after }}."""
 
@@ -381,12 +347,12 @@ async def generate_reverse_from_graph(
 ) -> str:
     """
     Generate reverse Shuffle workflow JSON menggunakan:
-      1. Workflow graph dari Neo4j (disimpan Node.js di Step 4)
-      2. RAG examples dari playbook vector store
-      3. Ollama (local LLM) via llm.complete_json()
+      1. Workflow graph dari Neo4j (disimpan Node.js di Step 4), termasuk
+         pemetaan HAS_REVERSE -> REVERSE_ACTION (auto_mapped / needs_llm /
+         requires_manual_review).
+      2. Ollama (local LLM) via llm.complete().
 
-    Returns JSON string — Node.js akan parse dan validasi hasilnya.
-    Error dilempar ke caller (endpoint /generate/reverse) untuk diteruskan ke Node.js.
+    Returns JSON string — Node.js akan parse, validasi, dan import.
     """
     attempt_num = retry_context.attempt if retry_context else 1
     logger.info(
@@ -395,100 +361,55 @@ async def generate_reverse_from_graph(
     )
     t_start = time.monotonic()
 
-    # 1. Ambil workflow graph dari Neo4j
-    logger.info("[STEP 1] Neo4j query start")
+    # 1. Ambil workflow graph (Action nodes) dari Neo4j
     graph_records = await _get_workflow_graph(workflow_id)
-    logger.info("[STEP 1] Neo4j done  elapsed=%.1fs  nodes=%d",
-                time.monotonic() - t_start, len(graph_records))
     if not graph_records:
         logger.warning("Empty graph result for workflow_id=%s", workflow_id)
         return []
 
-    # 2. Build compressed context
-    logger.info("[STEP 2] Build context start")
-    context = build(graph_records)
-    compressed_graph = context["graph"]
-    app_catalog = context["app_catalog"]
-    logger.info("[STEP 2] Context done  elapsed=%.1fs  graph=%d  apps=%d",
-                time.monotonic() - t_start,
-                len(compressed_graph), len(app_catalog.get("apps", [])))
-
-    # 3. Graph context (Neo4j — role/dependency awareness)
-    logger.info("[STEP 3] Graph context query start")
+    # 2. Ambil graph context + pemetaan reverse (HAS_REVERSE) dari Neo4j
+    rev_by_id: Dict[str, Dict[str, Any]] = {}
     graph_context: List[Dict[str, Any]] = []
     try:
         graph_context = await graph_retrieval.get_action_context(workflow_id)
-        logger.info("[STEP 3] Graph context done  elapsed=%.1fs  records=%d",
-                    time.monotonic() - t_start, len(graph_context))
+        for g in graph_context:
+            rev_by_id[g.get("id")] = {
+                "reverse_action_name": g.get("reverse_action_name"),
+                "reverse_status":      g.get("reverse_status"),
+                "reverse_reason":      g.get("reverse_reason"),
+            }
     except Exception as graph_err:
-        logger.warning("[STEP 3] Graph context failed  elapsed=%.1fs  err=%s",
-                       time.monotonic() - t_start, graph_err)
+        logger.warning("[GRAPH] context/reverse-map query failed: %s", graph_err)
 
-    graph_reasoning = ""
-    if graph_context:
-        graph_reasoning = "\nGRAPH CONTEXT (dependency + role awareness):\n" + "\n".join([
-            f"- {g.get('label')} | role={g.get('role')} | app={g.get('app')} | next={g.get('next_actions')}"
-            for g in graph_context
-        ])
-
-    # 4. RAG — semantic search only, no reranker (reranker adds ~model-load cost per call on CPU)
-    logger.info("[STEP 4] RAG search start")
-    rag_examples: List[str] = []
-    rag_query = " ".join(
-        f"{node.get('app_name') or ''} {node.get('name') or ''}".strip()
-        for node in compressed_graph
-    ).strip()
-
-    if rag_query:
-        try:
-            # Use retrieval.search() directly — skip recommender.recommend() which
-            # also loads + runs the cross-encoder reranker (heavy, not needed here).
-            rag_hits = await retrieval.search(rag_query, top_k=2)
-            rag_examples = [
-                f"{h['payload'].get('name', '')}: {h['payload'].get('description', '')}"
-                for h in rag_hits
-                if h.get("payload")
-            ]
-            logger.info("[STEP 4] RAG done  elapsed=%.1fs  hits=%d",
-                        time.monotonic() - t_start, len(rag_examples))
-        except Exception as rag_err:
-            logger.warning("[STEP 4] RAG failed  elapsed=%.1fs  err=%s",
-                           time.monotonic() - t_start, rag_err)
-            rag_examples = []   # degraded gracefully — RAG is optional, not blocking
-
-    # 5. Build prompts
-    logger.info("[STEP 5] Build prompt start")
+    # 3. Build system prompt berbasis pemetaan reverse (tanpa RAG)
     system_prompt = _build_reverse_system_prompt(
-        compressed_graph,
-        rag_examples[:1],
+        graph_records,
+        rev_by_id,
         retry_context,
-        graph_context
     )
+
+    # 4. User prompt ringkas
     prompt = (
         f"Workflow Name: {workflow_name}\n\n"
-        f"APP CATALOG (lightweight):\n{json.dumps(app_catalog, indent=2)}"
-        + (f"\n\n{graph_reasoning}" if graph_reasoning else "")
+        "Hasilkan reverse workflow JSON sesuai REVERSE MAPPING TABLE pada system prompt."
     )
-    logger.info("[STEP 5] Prompt ready  elapsed=%.1fs  system_len=%d  prompt_len=%d",
-                time.monotonic() - t_start, len(system_prompt), len(prompt))
+    logger.info("[STEP] Prompt ready  elapsed=%.1fs  system_len=%d",
+                time.monotonic() - t_start, len(system_prompt))
 
-    # 6. Call Ollama
-    logger.info("[STEP 6] Ollama call start  elapsed=%.1fs", time.monotonic() - t_start)
+    # 5. Call Ollama
     try:
         raw_output = await llm.complete(prompt=prompt, system=system_prompt)
-        logger.info("[STEP 6] Ollama done  elapsed=%.1fs  response_len=%d",
-                    time.monotonic() - t_start,
-                    len(raw_output) if raw_output else 0)
         if not raw_output:
             raise ValueError("Ollama returned empty response")
 
         # Post-process: inject large_image + strip invalid branches
         raw_output = _inject_large_images(raw_output, graph_records)
         raw_output = _sanitize_workflow(raw_output)
-        logger.info("[STEP 6] post-processing done, returning to route handler")
-
+        logger.info("[STEP] Ollama done  elapsed=%.1fs", time.monotonic() - t_start)
         return raw_output
+
     except Exception as exc:
-        logger.exception("[STEP 6] Ollama generation failed  elapsed=%.1fs",
+        logger.exception("[REVERSE] Ollama generation failed  elapsed=%.1fs",
                          time.monotonic() - t_start)
         raise RuntimeError(f"Reverse generation failed: {repr(exc)}")
+
