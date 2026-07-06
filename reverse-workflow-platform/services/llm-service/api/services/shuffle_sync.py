@@ -22,7 +22,6 @@ class ShuffleSyncService:
             for wf in workflows:
                 slug = f"shuffle-{wf.get('id')}"
                 existing = db.query(Playbook).filter_by(slug=slug).first()
-                # FIX: json.dumps for JSONB, never str(wf)
                 payload = json.loads(json.dumps(wf))
                 if existing:
                     existing.shuffle_json = payload
@@ -41,7 +40,6 @@ shuffle_sync_service = ShuffleSyncService()
 
 
 async def run_sync_loop():
-    # FIX: clean instantiation + while-loop, not __new__ bypassing __init__
     interval = settings.shuffle_sync_interval_minutes * 60
     while True:
         try:

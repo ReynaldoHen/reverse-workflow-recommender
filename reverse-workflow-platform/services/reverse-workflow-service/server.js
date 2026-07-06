@@ -2,74 +2,58 @@ const path = require("path")
 require("dotenv").config({ path: path.resolve(__dirname, "../.env") })
 
 const express = require("express")
-const cors = require("cors")
 
-// ─────────────────────────────
-// CORE PIPELINE MODULES
-// ─────────────────────────────
 const { parseWorkflow } = require("./parsers/workflowParser")
 const { buildGraph } = require("./graph/graphBuilder")
 const { saveGraphToNeo4j } = require("./neo4j/saveGraph")
 const { syncAppCatalog } = require("./shuffleApps/syncAppCatalog")
 
-// ─────────────────────────────
-// LLM + VALIDATION
-// ─────────────────────────────
 const { generateWithRetry } = require("./llm/llmService")
+const paperLog = require("./utils/paperLog")
 const { getWorkflowContext } = require("./neo4j/queryWorkflowContext")
 const { validateWorkflow } = require("./validators/validateWorkflow")
 
 const app = express()
+
+const cors = require("cors")
 app.use(cors())
 app.use(express.json({ limit: "10mb" }))
 app.use(express.urlencoded({ extended: true, limit: "10mb" }))
 
-// ─────────────────────────────
-// STATUS STORE (in-memory)
-// ─────────────────────────────
 const statusStore = new Map()
 function setStatus(id, status, extra = {}) {
   statusStore.set(id, { workflow_id: id, status, updated_at: new Date().toISOString(), ...extra })
 }
 
-// ─────────────────────────────
-// HEALTH
-// ─────────────────────────────
 app.get("/", (req, res) => {
   res.send("Reverse Workflow Service Running")
 })
 
-// ─────────────────────────────
-// MAIN PIPELINE
-// ─────────────────────────────
 app.post("/api/reverse-workflow", async (req, res) => {
   const { workflow_id, workflow_name, actions, branches } = req.body
   try {
     console.log("[1] Received workflow:", workflow_id)
     setStatus(workflow_id, "processing")
 
-    // 1. Parse
     const parsed = parseWorkflow(actions, branches)
 
-    // 2. Build Graph (termasuk REVERSE_ACTION + HAS_REVERSE)
+    paperLog.logParsing(workflow_name || workflow_id, parsed.nodes, parsed.edges)
+
     const graph = buildGraph(parsed, workflow_id, workflow_name)
 
-    // 3. Save Graph (Neo4j)
     await saveGraphToNeo4j(graph)
 
-    // 4. Sync Apps (safe)
     await safeSyncApps()
 
-    // 5. Verify Neo4j context exists
     const context = await getWorkflowContext(workflow_id)
     if (!context) {
       throw new Error("Workflow context not found in Neo4j")
     }
 
-    // 6. Call LLM + Validate Output + Import to Shuffle
     const llmResult = await generateWithRetry({
       workflow_id,
       workflow_name,
+      sourceNodes: parsed.nodes,
       maxRetries: 3
     })
 
@@ -99,9 +83,6 @@ app.post("/api/reverse-workflow", async (req, res) => {
   }
 })
 
-// ─────────────────────────────
-// STATUS — GET /api/reverse-workflow/status/:id
-// ─────────────────────────────
 app.get("/api/reverse-workflow/status/:id", (req, res) => {
   const st = statusStore.get(req.params.id)
   if (!st) {
@@ -110,9 +91,6 @@ app.get("/api/reverse-workflow/status/:id", (req, res) => {
   return res.json({ success: true, ...st })
 })
 
-// ─────────────────────────────
-// VALIDATE — POST /api/validate-workflow (tanpa import)
-// ─────────────────────────────
 app.post("/api/validate-workflow", async (req, res) => {
   try {
     const { workflow, workflow_id } = req.body
@@ -126,9 +104,6 @@ app.post("/api/validate-workflow", async (req, res) => {
   }
 })
 
-// ─────────────────────────────
-// SAFE SYNC
-// ─────────────────────────────
 async function safeSyncApps() {
   try {
     await syncAppCatalog()
@@ -138,9 +113,6 @@ async function safeSyncApps() {
   }
 }
 
-// ─────────────────────────────
-// START SERVER
-// ─────────────────────────────
 async function startServer() {
   await safeSyncApps()
   app.listen(5005, () => {

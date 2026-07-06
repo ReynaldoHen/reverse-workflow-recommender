@@ -8,7 +8,6 @@ from .config import get_settings
 settings = get_settings()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login", auto_error=False)
 
-# Thesis deployment uses a single admin account. Replace with a user table for production.
 ADMIN_USER = "admin"
 ADMIN_PASSWORD = "admin"
 

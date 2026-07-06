@@ -1,8 +1,5 @@
 const pool = require("./postgresClient")
 
-// ─────────────────────────────────────────────
-// TABLE CREATION (AUTO INIT)
-// ─────────────────────────────────────────────
 async function ensureTables(client) {
 
   console.log("[postgres] creating tables...")
@@ -42,9 +39,6 @@ async function ensureTables(client) {
   `)
 }
 
-// ─────────────────────────────────────────────
-// MAIN SYNC
-// ─────────────────────────────────────────────
 async function saveAppsToPostgres(apps) {
 
   console.log("[postgres] saveAppsToPostgres called")
@@ -60,7 +54,6 @@ async function saveAppsToPostgres(apps) {
 
     for (const app of apps) {
 
-      // APP
       await client.query(
         `
         INSERT INTO app_catalog (
@@ -87,7 +80,6 @@ async function saveAppsToPostgres(apps) {
 
         const actionKey = `${app.id}_${action.name}`
 
-        // ACTION
         await client.query(
           `
           INSERT INTO action_templates (
@@ -117,7 +109,6 @@ async function saveAppsToPostgres(apps) {
 
           const paramKey = `${actionKey}_${param.name}`
 
-          // PARAMETER
           await client.query(
             `
             INSERT INTO parameter_templates (

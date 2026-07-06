@@ -10,11 +10,10 @@ workflow, validates that output rigorously, and imports it back into Shuffle.
 | Service | Tech | Port | Role |
 |---|---|---|---|
 | `reverse-workflow-service` | Node.js / Express | 5005 | Orchestrator: parses the workflow, builds the graph, talks to Neo4j/Postgres, calls the LLM service, validates the result, and imports it back into Shuffle. |
-| `llm-service` | Python / FastAPI | 8000 | LLM + RAG. Queries Neo4j for graph context, retrieves similar playbooks from Qdrant, prompts Ollama, and returns the raw generated workflow. |
+| `llm-service` | Python / FastAPI | 8000 | Queries Neo4j for graph context + reverse mapping, builds the prompt, calls Ollama, and returns the raw generated reverse workflow. |
 | `neo4j` | Graph DB | 7474 / 7687 | Knowledge graph of workflows / actions / apps; also used for semantic validation. |
 | `postgres` | Relational DB | 5432 | Shared store. Orchestrator mirrors the app catalog here; the LLM service stores playbooks / generated workflows here. |
-| `qdrant` | Vector DB | 6333 | Vector store for RAG retrieval. |
-| `ollama` | Model runtime | 11434 | Runs the local LLM (default `llama3.1:8b`). |
+| `ollama` | Model runtime | 11434 | Runs the local LLM (default `dengcao/Qwen3-8B:Q5_K_M`). |
 
 ## Request flow
 
@@ -27,7 +26,7 @@ Shuffle ──POST /api/reverse-workflow──▶ reverse-workflow-service (Node
    5. confirm Neo4j context     (neo4j/queryWorkflowContext.js)
    6. login + call LLM ─────────▶ llm-service  POST /api/v1/generate/reverse
         (Node sends workflow_id/workflow_name/retry_context + JWT;
-         Python reads the graph back from Neo4j, does RAG, prompts Ollama)
+         Python reads the graph + reverse mapping from Neo4j and builds the prompt)
    7. validate + retry ×3        (validators/validateWorkflow.js)
    8. import back → Shuffle      (builders/buildShuffleWorkflow.js)
 ◀── { generated_workflow_id, ... }
@@ -38,7 +37,7 @@ Shuffle ──POST /api/reverse-workflow──▶ reverse-workflow-service (Node
 ```bash
 cp .env.example .env          # then edit the secrets (Postgres/Neo4j passwords, LLM_SECRET_KEY)
 docker compose up -d --build  # or: make up
-docker compose exec ollama ollama pull llama3.1:8b   # or: make pull-model
+docker compose exec ollama ollama pull dengcao/Qwen3-8B:Q5_K_M   # or: make pull-model
 ```
 
 Then check health:
@@ -48,9 +47,10 @@ curl http://localhost:8000/health     # llm-service  → {"status":"ok", ...}
 curl http://localhost:5005/           # orchestrator → "Reverse Workflow Service Running"
 ```
 
-The first `up` builds images and the LLM service downloads embedding/reranker
-models on first boot — give it a few minutes. The model pull (~5 GB) is a
-one-time step stored in the `ollama_models` volume.
+The first `up` builds images — give it a few minutes. The model pull (~6 GB)
+is a one-time step; it is stored on the host via the `./ollama-data` bind mount,
+so it persists across restarts. Qwen3 thinking mode is ON by default (set
+`LLM_THINK=false` in `.env` for faster CPU responses).
 
 ## How the two services authenticate
 
@@ -91,7 +91,7 @@ Their tables don't collide:
 
 ```
 make up          build & start everything
-make pull-model  pull the LLM model into Ollama (MODEL=llama3.1:8b)
+make pull-model  pull the LLM model into Ollama (MODEL=dengcao/Qwen3-8B:Q5_K_M)
 make health      curl both health endpoints
 make logs        tail all logs
 make down        stop the stack
@@ -109,5 +109,5 @@ make clean       stop and remove volumes (DESTROYS DATA)
 ## Per-service docs
 
 - `services/reverse-workflow-service/` — Node orchestrator.
-- `services/llm-service/README.md` — Python LLM + RAG service details.
+- `services/llm-service/README.md` — Python LLM service details.
 ```

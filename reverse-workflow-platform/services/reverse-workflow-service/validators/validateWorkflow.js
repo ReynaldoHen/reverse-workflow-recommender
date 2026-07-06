@@ -1,8 +1,5 @@
 const driver = require("../neo4j/neo4jDriver")
 
-// ─────────────────────────────────────────────
-// CONSTANTS
-// ─────────────────────────────────────────────
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -26,14 +23,9 @@ const CODE = {
   SHUFFLE_IMPORT_ERROR:     "SHUFFLE_IMPORT_ERROR",
 }
 
-// Normalisasi nama action agar cocok dengan kamus reverse (lowercase, spasi/hyphen -> underscore).
 function normalizeName(name) {
   return String(name || "").trim().toLowerCase().replace(/[\s-]+/g, "_")
 }
-
-// ─────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────
 
 function err(level, code, location, message, expected = null, received = null) {
   const e = { level, code, location, message }
@@ -57,7 +49,6 @@ function isNonEmptyString(val) {
 function validateStructure(workflow) {
   const errors = []
 
-  // ── workflow root ──────────────────────────
   if (!workflow || typeof workflow !== "object" || Array.isArray(workflow)) {
     return [err("structural", CODE.INVALID_JSON, "root",
       "Output must be a valid JSON object",
@@ -82,7 +73,6 @@ function validateStructure(workflow) {
     ))
   }
 
-  // ── actions ───────────────────────────────
   if (!Array.isArray(workflow.actions) || workflow.actions.length === 0) {
     errors.push(err("structural", CODE.MISSING_FIELD, "actions",
       "'actions' must be a non-empty array",
@@ -99,16 +89,12 @@ function validateStructure(workflow) {
     const a   = workflow.actions[i]
     const loc = `actions[${i}]`
 
-    // ── required string fields ───────────────
     const stringFields = {
       app_name:    "Application name from Neo4j, e.g. 'Virustotal_v3'",
       app_version: "Application version from Neo4j, e.g. '1.1.0'",
       app_id:      "Application ID from Neo4j, e.g. 'a86a53b9a463ceace67bb62eb2a9dab4'",
       id:          "Unique UUID v4 for this action, e.g. '4a183af7-7cf2-4ce9-a008-a931c7cf4ff6'",
       label:       "Display name on the Shuffle canvas, e.g. 'Check_Domain_Reputation'",
-      // large_image is intentionally excluded here — it is injected server-side
-      // after LLM generation (Python fills it from graph_records by app_id).
-      // Level B (semantic) still verifies the injected value matches Neo4j.
       name:        "Valid action name from Neo4j, e.g. 'get_comments_on_a_domain'",
     }
 
@@ -122,7 +108,6 @@ function validateStructure(workflow) {
       }
     }
 
-    // ── id format ────────────────────────────
     if (isNonEmptyString(a.id) && !isUUID(a.id)) {
       errors.push(err("structural", CODE.INVALID_FORMAT, `${loc}.id`,
         `'id' in action ${i + 1} must be a valid UUID v4`,
@@ -131,7 +116,6 @@ function validateStructure(workflow) {
       ))
     }
 
-    // ── duplicate action id ──────────────────
     if (a.id) {
       if (actionIds.has(a.id)) {
         errors.push(err("structural", CODE.DUPLICATE_ID, `${loc}.id`,
@@ -143,7 +127,6 @@ function validateStructure(workflow) {
       actionIds.add(a.id)
     }
 
-    // ── is_start_node ────────────────────────
     if (typeof a.is_start_node !== "boolean") {
       errors.push(err("structural", CODE.INVALID_TYPE, `${loc}.is_start_node`,
         "'is_start_node' must be a boolean",
@@ -154,7 +137,6 @@ function validateStructure(workflow) {
       startCount++
     }
 
-    // ── execution_delay ──────────────────────
     if (typeof a.execution_delay !== "number" || a.execution_delay < 0) {
       errors.push(err("structural", CODE.INVALID_TYPE, `${loc}.execution_delay`,
         "'execution_delay' must be a number >= 0",
@@ -163,7 +145,6 @@ function validateStructure(workflow) {
       ))
     }
 
-    // ── position ─────────────────────────────
     if (
       !a.position ||
       typeof a.position !== "object"   ||
@@ -178,7 +159,6 @@ function validateStructure(workflow) {
     }
   }
 
-  // ── start node count ──────────────────────
   if (startCount === 0) {
     errors.push(err("structural", CODE.MISSING_START_NODE, "actions",
       "No action has is_start_node: true",
@@ -193,7 +173,6 @@ function validateStructure(workflow) {
     ))
   }
 
-  // ── branches ─────────────────────────────
   if (!Array.isArray(workflow.branches)) {
     errors.push(err("structural", CODE.INVALID_TYPE, "branches",
       "'branches' must be an array",
@@ -209,7 +188,6 @@ function validateStructure(workflow) {
     const b   = workflow.branches[i]
     const loc = `branches[${i}]`
 
-    // ── required branch fields ────────────────
     for (const field of ["id", "source_id", "destination_id"]) {
       if (!isNonEmptyString(b[field])) {
         errors.push(err("structural", CODE.MISSING_FIELD, `${loc}.${field}`,
@@ -226,7 +204,6 @@ function validateStructure(workflow) {
       }
     }
 
-    // ── duplicate branch id ───────────────────
     if (b.id) {
       if (branchIds.has(b.id)) {
         errors.push(err("structural", CODE.DUPLICATE_ID, `${loc}.id`,
@@ -238,7 +215,6 @@ function validateStructure(workflow) {
       branchIds.add(b.id)
     }
 
-    // ── branch references ─────────────────────
     const validIds = [...actionIds].join(", ")
 
     if (b.source_id && isUUID(b.source_id) && !actionIds.has(b.source_id)) {
@@ -274,9 +250,8 @@ async function validateSemantic(workflow) {
       const a   = workflow.actions[i]
       const loc = `actions[${i}]`
 
-      if (!a.app_id) continue // already caught by structural validation
+      if (!a.app_id) continue
 
-      // ── check APP node ────────────────────
       const appRes = await session.run(
         `MATCH (a:APP {app_id: $app_id})
          RETURN a.app_name    AS app_name,
@@ -300,7 +275,6 @@ async function validateSemantic(workflow) {
         large_image: appRes.records[0].get("large_image"),
       }
 
-      // ── app_name ──────────────────────────
       if (a.app_name !== neo4j.app_name) {
         errors.push(err("semantic", CODE.APP_FIELD_MISMATCH, `${loc}.app_name`,
           `app_name does not match app_id '${a.app_id}'`,
@@ -309,7 +283,6 @@ async function validateSemantic(workflow) {
         ))
       }
 
-      // ── app_version ───────────────────────
       if (a.app_version !== neo4j.app_version) {
         errors.push(err("semantic", CODE.APP_FIELD_MISMATCH, `${loc}.app_version`,
           `app_version does not match app_id '${a.app_id}'`,
@@ -318,9 +291,6 @@ async function validateSemantic(workflow) {
         ))
       }
 
-      // ── large_image ───────────────────────
-      // base64 value is too long to include in the error message.
-      // LLM is instructed to retrieve the value from the Knowledge Graph.
       if (a.large_image !== neo4j.large_image) {
         errors.push(err("semantic", CODE.APP_FIELD_MISMATCH, `${loc}.large_image`,
           `large_image does not match app_id '${a.app_id}'`,
@@ -329,7 +299,6 @@ async function validateSemantic(workflow) {
         ))
       }
 
-      // ── action name ───────────────────────
       if (!a.name) continue
 
       const actRes = await session.run(
@@ -340,7 +309,6 @@ async function validateSemantic(workflow) {
 
       if (actRes.records.length === 0) {
 
-        // fetch valid action examples to help the LLM self-correct
         const exRes = await session.run(
           `MATCH (APP:APP {app_id: $app_id})-[:HAS_ACTION]->(act:ACTION_TEMPLATE)
            RETURN act.name AS action_name
@@ -370,10 +338,6 @@ async function validateSemantic(workflow) {
 
 // ─────────────────────────────────────────────
 // LEVEL C — RULE-BASED REVERSE MAPPING CHECK
-// Memverifikasi (berbasis aturan, bukan menjamin makna) bahwa setiap reverse
-// action yang dipetakan otomatis (status=auto_mapped) benar-benar muncul di
-// workflow hasil generate. Action ber-status requires_manual_review TIDAK
-// diwajibkan — cukup ditandai untuk peninjauan analis.
 // ─────────────────────────────────────────────
 
 async function validateReverseMapping(workflow, workflowId) {
@@ -385,22 +349,22 @@ async function validateReverseMapping(workflow, workflowId) {
     const res = await session.run(
       `MATCH (a:ACTION {workflow_id: $workflowId})-[:HAS_REVERSE]->(r:REVERSE_ACTION)
        WHERE r.status = 'auto_mapped' AND r.reverse_action_name <> ''
-       RETURN DISTINCT r.reverse_action_name AS expected`,
+       RETURN DISTINCT r.reverse_action_name AS expected, a.action_name AS source`,
       { workflowId }
     )
-
-    const expected = res.records.map(r => normalizeName(r.get("expected")))
-    if (expected.length === 0) return errors
+    if (res.records.length === 0) return errors
 
     const present = new Set(
       (workflow.actions || []).map(a => normalizeName(a.name))
     )
 
-    for (const exp of expected) {
-      if (!present.has(exp)) {
+    for (const rec of res.records) {
+      const exp = normalizeName(rec.get("expected"))
+      const src = normalizeName(rec.get("source"))
+      if (!present.has(exp) && !present.has(src)) {
         errors.push(err("semantic", CODE.REVERSE_MAPPING_MISMATCH, "actions",
-          `Reverse action '${exp}' yang dipetakan otomatis tidak ditemukan pada workflow hasil`,
-          `Sertakan action dengan name '${exp}' sesuai pemetaan HAS_REVERSE di Neo4j`,
+          `Reverse untuk '${src}' tidak ditemukan: tidak ada '${exp}' maupun '${src}' pada hasil`,
+          `Sertakan action '${exp}' (reverse mekanis) atau pertahankan '${src}' (audit/notifikasi)`,
           [...present].join(", ")
         ))
       }
@@ -412,11 +376,99 @@ async function validateReverseMapping(workflow, workflowId) {
   return errors
 }
 
-// Kumpulkan action yang ditandai requires_manual_review (human review flag).
 function collectReviewRequired(workflow) {
   return (workflow.actions || [])
     .filter(a => a && a.requires_manual_review === true)
     .map(a => ({ id: a.id || null, name: a.name || null }))
+}
+
+async function getAppImages(appIds) {
+  const ids = [...new Set((appIds || []).filter(Boolean))]
+  if (!ids.length) return {}
+  const session = driver.session()
+  try {
+    const res = await session.run(
+      `MATCH (app:APP) WHERE app.app_id IN $ids
+       RETURN app.app_id AS app_id, COALESCE(app.large_image, '') AS large_image`,
+      { ids }
+    )
+    const map = {}
+    res.records.forEach(r => { map[r.get("app_id")] = r.get("large_image") })
+    return map
+  } catch (e) {
+    console.warn("[validate] getAppImages gagal:", e.message)
+    return {}
+  } finally {
+    await session.close()
+  }
+}
+
+async function getAutoMappedFromGraph(workflowId) {
+  if (!workflowId) return []
+  const session = driver.session()
+  try {
+    const res = await session.run(
+      `MATCH (a:ACTION {workflow_id: $workflowId})-[:HAS_REVERSE]->(r:REVERSE_ACTION)
+       WHERE r.status = 'auto_mapped'
+       OPTIONAL MATCH (a)-[:USES_APP]->(app:APP)
+       RETURN a.action_id      AS source_action_id,
+              a.action_name     AS source_action_name,
+              a.app_name        AS app_name,
+              a.app_id          AS app_id,
+              a.app_version     AS app_version,
+              a.parameters      AS parameters,
+              COALESCE(app.large_image, '') AS large_image,
+              r.reverse_action_name AS reverse_action_name`,
+      { workflowId }
+    )
+    return res.records.map(x => {
+      let params = []
+      try { params = JSON.parse(x.get("parameters") || "[]") } catch (_) { params = [] }
+      return {
+        source_action_name: x.get("source_action_name"),
+        app_name:           x.get("app_name") || "",
+        app_id:             x.get("app_id") || "",
+        app_version:        x.get("app_version") || "",
+        large_image:        x.get("large_image") || "",
+        reverse_action_name: x.get("reverse_action_name") || "",
+        parameters:         Array.isArray(params) ? params : [],
+      }
+    }).filter(m => m.reverse_action_name)
+  } catch (err) {
+    console.warn("[validate] getAutoMappedFromGraph gagal:", err.message)
+    return []
+  } finally {
+    await session.close()
+  }
+}
+
+async function getReviewRequiredFromGraph(workflowId) {
+  if (!workflowId) return []
+  const session = driver.session()
+  try {
+    const res = await session.run(
+      `MATCH (a:ACTION {workflow_id: $workflowId})-[:HAS_REVERSE]->(r:REVERSE_ACTION)
+       WHERE r.status IN ['requires_manual_review', 'needs_llm']
+       RETURN a.action_id     AS source_action_id,
+              a.action_name    AS source_action_name,
+              a.app_name       AS app_name,
+              r.status         AS status,
+              r.reason         AS reason`,
+      { workflowId }
+    )
+    return res.records.map(x => ({
+      source_action_id:   x.get("source_action_id"),
+      source_action_name: x.get("source_action_name"),
+      app_name:           x.get("app_name"),
+      status:             x.get("status"),
+      reason:             x.get("reason") || ""
+    }))
+  } catch (err) {
+    console.warn("[validate] getReviewRequiredFromGraph gagal:", err.message)
+    return []
+  } finally {
+    await session.close()
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -461,19 +513,6 @@ function buildCorrectionInstructions(errors) {
   return lines.join(" ")
 }
 
-// ─────────────────────────────────────────────
-// MAIN
-// ─────────────────────────────────────────────
-
-/**
- * Run 3-level validation in order.
- * Stops at the first level that has errors so LLM
- * feedback stays focused and actionable.
- *
- * Level A (structural) → Level B (semantic/Neo4j)
- * Level C (import) is executed inside llmService
- * and converted to the same error format on failure.
- */
 async function validateWorkflow(workflow, workflowId = null) {
 
   // ── Level A ───────────────────────────────
@@ -509,14 +548,9 @@ async function validateWorkflow(workflow, workflowId = null) {
     }
   }
 
-  // valid — sertakan daftar action yang perlu peninjauan analis (human review flag)
-  return { valid: true, errors: [], review_required: collectReviewRequired(workflow) }
+  return { valid: true, errors: [], review_required: await getReviewRequiredFromGraph(workflowId) }
 }
 
-/**
- * Wrap a Shuffle import error (Level C) into the
- * same format used by Level A and B validation.
- */
 function buildImportError(shuffleErrorMessage) {
   const errors = [
     err("import", CODE.SHUFFLE_IMPORT_ERROR, "workflow",
@@ -536,4 +570,7 @@ function buildImportError(shuffleErrorMessage) {
 module.exports = {
   validateWorkflow,
   buildImportError,
+  getReviewRequiredFromGraph,
+  getAutoMappedFromGraph,
+  getAppImages,
 }

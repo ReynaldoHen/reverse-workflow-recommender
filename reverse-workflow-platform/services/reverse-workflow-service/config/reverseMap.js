@@ -1,9 +1,6 @@
 const fs = require("fs")
 const path = require("path")
 
-// ─────────────────────────────────────────────
-// Loader reverseActionMap.json v2 (scope per-app + default_status + heuristics)
-// ─────────────────────────────────────────────
 const MAP_PATH = path.resolve(__dirname, "reverseActionMap.json")
 
 let _data = { version: 0, apps: {}, heuristics: {} }
@@ -16,12 +13,10 @@ try {
 const APPS = _data.apps || {}
 const HEUR = _data.heuristics || {}
 
-// Normalisasi nama (action/app): lowercase, spasi & hyphen -> underscore.
 function normalize(name) {
   return String(name || "").trim().toLowerCase().replace(/[\s-]+/g, "_")
 }
 
-// Cari konfigurasi app secara toleran (exact dulu, lalu normalized).
 function getAppConfig(appName) {
   if (!appName) return null
   if (APPS[appName]) return APPS[appName]
@@ -37,43 +32,34 @@ function startsWithAny(value, prefixes) {
   return prefixes.some(p => value.startsWith(normalize(p)))
 }
 
-// ─────────────────────────────────────────────
-// resolveReverse(actionName, appName)
-//   → { status, reverse_action_name, reason }
-//   status: auto_mapped | requires_manual_review | no_reverse_needed | needs_llm
-// Urutan resolusi: reversible → requires_manual_review → no_reverse_needed →
-//                  needs_llm (per app) → default_status → heuristics → needs_llm
-// ─────────────────────────────────────────────
 function resolveReverse(actionName, appName = null) {
   const act = normalize(actionName)
+  const llmActs = (HEUR.needs_llm_actions || ["custom_action"]).map(normalize)
+  if (llmActs.includes(act)) {
+    return { status: "needs_llm", reverse_action_name: "", reason: "custom_action: kebalikan disimpulkan dari konfigurasi (method/url/body)" }
+  }
   const cfg = getAppConfig(appName)
 
   if (cfg) {
-    // 1. reversible (pemetaan eksplisit)
     for (const pair of (cfg.reversible || [])) {
       if (normalize(pair.action) === act) {
         return { status: "auto_mapped", reverse_action_name: normalize(pair.reverse_action), reason: "" }
       }
     }
-    // 2. requires_manual_review (daftar eksplisit per app)
     if ((cfg.requires_manual_review || []).some(a => normalize(a) === act)) {
       return { status: "requires_manual_review", reverse_action_name: "", reason: "app_listed" }
     }
-    // 3. no_reverse_needed (daftar eksplisit per app)
     if ((cfg.no_reverse_needed || []).some(a => normalize(a) === act)) {
       return { status: "no_reverse_needed", reverse_action_name: "", reason: "app_listed" }
     }
-    // 4. needs_llm (daftar eksplisit per app)
     if ((cfg.needs_llm || []).some(a => normalize(a) === act)) {
       return { status: "needs_llm", reverse_action_name: "", reason: "app_listed" }
     }
-    // 5. default_status app (mis. utilitas -> no_reverse_needed)
     if (cfg.default_status) {
       return { status: cfg.default_status, reverse_action_name: "", reason: "app_default" }
     }
   }
 
-  // 6. heuristik global berbasis prefix
   if (startsWithAny(act, HEUR.no_reverse_prefixes)) {
     return { status: "no_reverse_needed", reverse_action_name: "", reason: "heuristic_prefix" }
   }
@@ -81,11 +67,9 @@ function resolveReverse(actionName, appName = null) {
     return { status: "requires_manual_review", reverse_action_name: "", reason: "heuristic_prefix" }
   }
 
-  // 7. default
   return { status: "needs_llm", reverse_action_name: "", reason: "unclassified" }
 }
 
-// Kompatibilitas: helper lama.
 function lookupReverse(actionName, appName = null) {
   const r = resolveReverse(actionName, appName)
   return r.status === "auto_mapped" ? { reverseAction: r.reverse_action_name } : null

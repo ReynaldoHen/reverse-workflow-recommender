@@ -1,8 +1,5 @@
 const driver = require("../neo4j/neo4jDriver")
 
-// ─────────────────────────────────────────────
-// SAFE SERIALIZER (WAJIB UNTUK NEO4J)
-// ─────────────────────────────────────────────
 const safe = (v) => {
   if (v === null || v === undefined) return ""
   if (typeof v === "object") return JSON.stringify(v)
@@ -17,14 +14,8 @@ async function saveAppsToNeo4j(apps) {
 
   try {
 
-    // ─────────────────────────────
-    // APP + ACTION TEMPLATE SYNC
-    // ─────────────────────────────
     for (const app of apps) {
 
-      // ─────────────────────────────
-      // APP NODE (GLOBAL CATALOG)
-      // ─────────────────────────────
       await session.run(
         `
         MERGE (a:APP {app_id: $app_id})
@@ -42,9 +33,6 @@ async function saveAppsToNeo4j(apps) {
         }
       )
 
-      // ─────────────────────────────
-      // ACTION TEMPLATE
-      // ─────────────────────────────
       for (const action of (app.actions || [])) {
 
         const actionKey = `${app.id}_${action.name}`
@@ -68,7 +56,6 @@ async function saveAppsToNeo4j(apps) {
           }
         )
 
-        // RELATION: APP -> ACTION
         await session.run(
           `
           MATCH (APP:APP {app_id: $app_id})
@@ -81,9 +68,6 @@ async function saveAppsToNeo4j(apps) {
           }
         )
 
-        // ─────────────────────────────
-        // PARAMETER TEMPLATE
-        // ─────────────────────────────
         for (const param of (action.parameters || [])) {
 
           const paramKey = `${actionKey}_${param.name}`
@@ -107,7 +91,6 @@ async function saveAppsToNeo4j(apps) {
             }
           )
 
-          // RELATION: ACTION -> PARAMETER
           await session.run(
             `
             MATCH (act:ACTION_TEMPLATE {action_key: $actionKey})
@@ -123,9 +106,6 @@ async function saveAppsToNeo4j(apps) {
       }
     }
 
-    // ─────────────────────────────
-    // SYNC META (TTL CONTROL)
-    // ─────────────────────────────
     await session.run(
       `
       MERGE (m:APP_SYNC_META {id: "singleton"})

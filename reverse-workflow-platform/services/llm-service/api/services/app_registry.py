@@ -6,7 +6,6 @@ actually installed there.
 """
 import hashlib
 
-# Built-in apps with real/stable Shuffle app IDs where known.
 BUILTIN = {
     "virustotal": {"name": "virustotal", "display": "VirusTotal", "category": "Threat Intel",
                    "app_id": "a530ba31-e10f-4a7e-9590-c3cbfe8b5df8", "version": "1.0.0",
@@ -75,7 +74,6 @@ class AppRegistry:
         key = (key or "").strip().lower().replace(" ", "_")
         if key in self._apps:
             return self._apps[key]
-        # Fallback: deterministic UUID-like id so workflows stay structurally valid
         det = hashlib.sha1(key.encode()).hexdigest()[:32]
         return {"name": key, "display": key.title(), "category": "Unknown",
                 "app_id": det, "actions": [], "_synthetic": True}

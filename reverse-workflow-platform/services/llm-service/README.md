@@ -20,9 +20,7 @@ offline/mock mode so the thesis demo works end to end.
 ```bash
 cp .env.example .env          # set SECRET_KEY + POSTGRES_PASSWORD
 docker compose up -d          # core stack (add --profile monitoring for Prometheus/Grafana)
-docker exec playbook-ollama ollama pull llama3.1:8b
-python scripts/ingest_playbooks.py --file sample_data/playbook_dataset_50.json \
-    --api-url http://localhost:8000 --username admin --password admin
+docker compose exec ollama ollama pull dengcao/Qwen3-8B:Q5_K_M
 ```
 Open the UI at http://localhost:8080 (login `admin` / `admin`).
 

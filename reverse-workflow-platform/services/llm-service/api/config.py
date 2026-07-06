@@ -19,21 +19,23 @@ class Settings(BaseSettings):
 
     # LLM (Ollama)
     ollama_host: str = "http://ollama:11434"
-    llm_model: str = "llama3.1:8b"
-    llm_temperature: float = 0.1
+    llm_model: str = "dengcao/Qwen3-8B:Q5_K_M"
+    llm_temperature: float = 0.3
+    llm_think: bool = False
+    llm_top_p: float = 0.95
+    llm_top_k: int = 20
+    llm_presence_penalty: float = 1.5
+    llm_num_predict: int = 1536
+    llm_num_ctx: int = 4096
+    llm_format: str = "json"
     llm_max_retries: int = 3
-    # Read timeout for a single Ollama generation call (seconds).
-    # llama3.1:8b on CPU can take 5–15 min for a complex prompt.
-    # Override via OLLAMA_READ_TIMEOUT in .env — set lower if you have GPU.
     ollama_read_timeout: int = 900
 
-    # Neo4j lokal via Docker (dibaca dari .env: NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD, NEO4J_DATABASE)
     neo4j_uri: str = ""
     neo4j_username: str = ""
     neo4j_password: str = ""
     neo4j_database: str = ""
 
-    # Shuffle SOAR integration (first-class)
     shuffle_api_url: str = ""
     shuffle_api_key: str = ""
     shuffle_org_id: str = ""

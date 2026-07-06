@@ -15,9 +15,6 @@ function extractApps(data) {
   return []
 }
 
-// ─────────────────────────────────────────────
-// CLOUD
-// ─────────────────────────────────────────────
 async function fetchFromCloud() {
   if (!process.env.SHUFFLE_CLOUD_URL) {
     console.warn("[apps][cloud] SHUFFLE_CLOUD_URL not set")
@@ -58,9 +55,6 @@ async function fetchFromCloud() {
   return all
 }
 
-// ─────────────────────────────────────────────
-// LOCAL
-// ─────────────────────────────────────────────
 async function fetchFromLocal() {
   if (!process.env.SHUFFLE_API_URL) {
     console.warn("[apps][local] SHUFFLE_API_URL missing")
@@ -107,9 +101,6 @@ async function fetchFromLocal() {
   return all
 }
 
-// ─────────────────────────────────────────────
-// MERGE
-// ─────────────────────────────────────────────
 async function fetchAllApps() {
   const cloud = await fetchFromCloud()
   const local = await fetchFromLocal()

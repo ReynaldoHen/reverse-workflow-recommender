@@ -1,16 +1,23 @@
 const driver = require("./neo4jDriver")
 
+function sanitizeProps(props) {
+  const out = {}
+  for (const [k, v] of Object.entries(props || {})) {
+    if (v === null || v === undefined) { out[k] = null }
+    else if (typeof v === "object") { out[k] = JSON.stringify(v) }
+    else { out[k] = v }
+  }
+  return out
+}
+
 const saveGraphToNeo4j = async (graphData) => {
   const session = driver.session()
 
   try {
 
-    // ─────────────────────────────
-    // 1. SAVE NODES
-    // ─────────────────────────────
     for (const node of graphData.nodes) {
 
-      const props = node.properties || {}
+      const props = sanitizeProps(node.properties)
 
       if (node.type === "WORKFLOW") {
         await session.run(
@@ -45,9 +52,6 @@ const saveGraphToNeo4j = async (graphData) => {
       }
     }
 
-    // ─────────────────────────────
-    // 2. RELATIONSHIPS
-    // ─────────────────────────────
     for (const rel of graphData.relationships) {
 
       await session.run(
@@ -70,7 +74,7 @@ const saveGraphToNeo4j = async (graphData) => {
         {
           source: rel.source,
           target: rel.target,
-          props: rel.properties || {}
+          props: sanitizeProps(rel.properties)
         }
       )
     }

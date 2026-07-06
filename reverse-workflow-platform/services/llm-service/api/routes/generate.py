@@ -10,13 +10,6 @@ from ..services.playbook_generator import generate_reverse_from_graph
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/generate", tags=["generate"])
 
-
-# =============================================================================
-# POST /generate/reverse
-# Dipanggil oleh reverse-workflow-service (Node.js) di Step 5.
-# Workflow graph sudah tersimpan di Neo4j (Step 4 oleh Node.js).
-# =============================================================================
-
 @router.post("/reverse", response_model=ReverseWorkflowResponse)
 async def generate_reverse_workflow(
     req: ReverseWorkflowRequest,
@@ -36,7 +29,7 @@ async def generate_reverse_workflow(
         req.retry_context.attempt if req.retry_context else 1,
     )
     try:
-        raw_output = await generate_reverse_from_graph(
+        raw_output, prompt_used = await generate_reverse_from_graph(
             workflow_id=req.workflow_id,
             workflow_name=req.workflow_name,
             retry_context=req.retry_context,
@@ -48,16 +41,12 @@ async def generate_reverse_workflow(
                 error="generate_reverse_from_graph returned None"
             )
 
-        return ReverseWorkflowResponse(raw_output=str(raw_output))
+        return ReverseWorkflowResponse(raw_output=str(raw_output), prompt=prompt_used)
 
     except Exception as exc:
         logger.error("[/generate/reverse] Error: %s", exc, exc_info=True)
         return ReverseWorkflowResponse(error=str(exc))
 
-
-# =============================================================================
-# GET /generate/registry
-# =============================================================================
 
 @router.get("/registry")
 async def registry(user: str = Depends(current_user)):

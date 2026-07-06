@@ -1,6 +1,6 @@
 # Reverse Workflow Platform — convenience targets
 
-MODEL ?= llama3.1:8b
+MODEL ?= dengcao/Qwen3-8B:Q5_K_M
 
 .PHONY: help up down build logs pull-model ps clean health
 

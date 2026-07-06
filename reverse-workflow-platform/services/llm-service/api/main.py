@@ -1,4 +1,3 @@
-"""FastAPI entrypoint: routes, startup, background Shuffle sync."""
 import asyncio
 import logging
 import secrets
@@ -14,7 +13,6 @@ settings = get_settings()
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("playbook-api")
 
-# Surface an admin API key in the logs on first boot (thesis convenience).
 BOOT_API_KEY = secrets.token_hex(16)
 
 
@@ -22,7 +20,7 @@ BOOT_API_KEY = secrets.token_hex(16)
 async def lifespan(app: FastAPI):
     init_models()
     log.info("admin api_key (login admin/admin for JWT): %s", BOOT_API_KEY)
-    task = asyncio.create_task(run_sync_loop())   # background Shuffle sync
+    task = asyncio.create_task(run_sync_loop())
     yield
     task.cancel()
 

@@ -20,7 +20,6 @@ import uuid
 from .app_registry import app_registry
 from ..config import get_settings
 
-# Default on-prem environment name in Shuffle (main.go: foundEnvironment := "Shuffle").
 DEFAULT_ENVIRONMENT = "Shuffle"
 
 
@@ -42,7 +41,6 @@ class ShuffleTranslator:
             id_map[node.get("id")] = node_id
             app = app_registry.resolve(node.get("app"))
 
-            # Grid auto-layout (matches Shuffle canvas spacing).
             x = 250.0 + (idx % 3) * 250.0
             y = 150.0 + (idx // 3) * 200.0
             is_start = (idx == 0)
@@ -130,15 +128,12 @@ class ShuffleTranslator:
                 errors.append(f"Missing field: {field}")
         if not wf.get("actions"):
             errors.append("Workflow has no actions.")
-        # Start must reference a real action id.
         action_ids = {a.get("id") for a in wf.get("actions", [])}
         if wf.get("start") and wf["start"] not in action_ids:
             errors.append("start does not reference a valid action id.")
-        # Every branch must connect known actions.
         for b in wf.get("branches", []):
             if b.get("source_id") not in action_ids or b.get("destination_id") not in action_ids:
                 errors.append(f"Branch {b.get('id')} references unknown action.")
-        # Exactly one start node flagged.
         starts = [a for a in wf.get("actions", []) if a.get("isStartNode")]
         if len(starts) != 1:
             errors.append(f"Expected exactly 1 start node, found {len(starts)}.")

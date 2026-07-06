@@ -5,9 +5,6 @@ const driver = require("../neo4j/neo4jDriver")
 
 const TTL_HOURS = parseInt(process.env.APP_SYNC_TTL_HOURS || "24", 10)
 
-// ─────────────────────────────────────────────
-// TTL CHECK
-// ─────────────────────────────────────────────
 async function checkSyncNeeded() {
   const session = driver.session()
 
@@ -55,14 +52,11 @@ async function checkSyncNeeded() {
   }
 }
 
-// ─────────────────────────────────────────────
-// MAIN
-// ─────────────────────────────────────────────
 async function syncAppCatalog() {
   console.log("[apps] ── App Catalog Sync ──────────────────")
   console.log(`[apps] TTL = ${TTL_HOURS}h`)
 
-  const { needed } = await checkSyncNeeded()
+  // const { needed } = await checkSyncNeeded()
 
   if (!needed) {
     return { success: true, skipped: true }

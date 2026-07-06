@@ -11,153 +11,481 @@
     "resolution_order": "apps[app].reversible -> apps[app].requires_manual_review -> apps[app].no_reverse_needed -> apps[app].default_status -> heuristics -> needs_llm"
   },
   "heuristics": {
-    "no_reverse_prefixes": ["get_", "list_", "search_", "lookup_", "head_", "describe_", "post_describe", "post_list", "post_search", "post_fetch", "post_query"],
-    "manual_review_prefixes": ["put_set_", "put_update", "put_edit", "put_assign", "put_move", "put_resets", "put_remediate", "put_toggle", "put_restart", "put_upgrade", "put_run", "patch_", "update_", "delete_", "post_delete", "deletes_", "reset_", "post_reset", "post_revoke", "put_revoke", "post_commit"],
+    "no_reverse_prefixes": [
+      "get_",
+      "list_",
+      "search_",
+      "lookup_",
+      "head_",
+      "describe_",
+      "post_describe",
+      "post_list",
+      "post_search",
+      "post_fetch",
+      "post_query"
+    ],
+    "manual_review_prefixes": [
+      "put_set_",
+      "put_update",
+      "put_edit",
+      "put_assign",
+      "put_move",
+      "put_resets",
+      "put_remediate",
+      "put_toggle",
+      "put_restart",
+      "put_upgrade",
+      "put_run",
+      "patch_",
+      "update_",
+      "delete_",
+      "post_delete",
+      "deletes_",
+      "reset_",
+      "post_reset",
+      "post_revoke",
+      "put_revoke",
+      "post_commit"
+    ],
     "reversible_prefix_pairs": [
-      ["post_add_", "delete_"], ["post_create_", "delete_"], ["create_", "delete_"],
-      ["post_create", "post_delete"], ["enable_", "disable_"], ["block_", "unblock_"],
-      ["isolate_", "unisolate_"], ["mute_", "unmute_"], ["associate", "disassociate"],
-      ["tagresource", "untagresource"], ["grant", "revoke"], ["assign", "remove"]
+      [
+        "post_add_",
+        "delete_"
+      ],
+      [
+        "post_create_",
+        "delete_"
+      ],
+      [
+        "create_",
+        "delete_"
+      ],
+      [
+        "post_create",
+        "post_delete"
+      ],
+      [
+        "enable_",
+        "disable_"
+      ],
+      [
+        "block_",
+        "unblock_"
+      ],
+      [
+        "isolate_",
+        "unisolate_"
+      ],
+      [
+        "mute_",
+        "unmute_"
+      ],
+      [
+        "associate",
+        "disassociate"
+      ],
+      [
+        "tagresource",
+        "untagresource"
+      ],
+      [
+        "grant",
+        "revoke"
+      ],
+      [
+        "assign",
+        "remove"
+      ]
+    ],
+    "needs_llm_actions": [
+      "custom_action"
     ]
   },
   "apps": {
     "FortiGate_Firewall": {
       "reversible": [
-        { "action": "post_add_firewall_address",       "reverse_action": "delete_firewall_address" },
-        { "action": "post_add_firewall_address_group",  "reverse_action": "delete_firewall_address_group" },
-        { "action": "post_add_firewall_policy",         "reverse_action": "delete_firewall_policy" },
-        { "action": "post_add_firewall_service",        "reverse_action": "delete_firewall_service" },
-        { "action": "post_add_firewall_vip",            "reverse_action": "delete_firewall_vip" },
-        { "action": "post_add_firewall_ip_pool",        "reverse_action": "delete_firewall_ip_pool" },
-        { "action": "post_add_dhcp_server",             "reverse_action": "delete_dhcp_server" },
-        { "action": "post_add_router_static",           "reverse_action": "delete_router_static" },
-        { "action": "post_add_vdom",                    "reverse_action": "delete_vdom" },
-        { "action": "post_add_vdom_link",               "reverse_action": "delete_vdom_link" },
-        { "action": "post_add_vlan_interface",          "reverse_action": "delete_vlan_interface" }
+        {
+          "action": "post_add_firewall_address",
+          "reverse_action": "delete_firewall_address"
+        },
+        {
+          "action": "post_add_firewall_address_group",
+          "reverse_action": "delete_firewall_address_group"
+        },
+        {
+          "action": "post_add_firewall_policy",
+          "reverse_action": "delete_firewall_policy"
+        },
+        {
+          "action": "post_add_firewall_service",
+          "reverse_action": "delete_firewall_service"
+        },
+        {
+          "action": "post_add_firewall_vip",
+          "reverse_action": "delete_firewall_vip"
+        },
+        {
+          "action": "post_add_firewall_ip_pool",
+          "reverse_action": "delete_firewall_ip_pool"
+        },
+        {
+          "action": "post_add_dhcp_server",
+          "reverse_action": "delete_dhcp_server"
+        },
+        {
+          "action": "post_add_router_static",
+          "reverse_action": "delete_router_static"
+        },
+        {
+          "action": "post_add_vdom",
+          "reverse_action": "delete_vdom"
+        },
+        {
+          "action": "post_add_vdom_link",
+          "reverse_action": "delete_vdom_link"
+        },
+        {
+          "action": "post_add_vlan_interface",
+          "reverse_action": "delete_vlan_interface"
+        }
       ],
-      "requires_manual_review": ["post_add_vdom_link_interface"],
-      "no_reverse_needed": ["post_login", "post_logout"]
-    },
-
-    "Palo_Alto_Networks": {
-      "reversible": [],
-      "requires_manual_review": ["post_block_outbound_ip", "post_add_security_rule", "post_create_application_object", "post_commit_changes"],
-      "_note": "App ini tidak mengekspos aksi pembalik (tidak ada unblock/delete_rule). Semua aksi state-changing -> manual review."
-    },
-
-    "Cisco_ASA": {
-      "reversible": [
-        { "action": "post_add_firewall_rule", "reverse_action": "delete_rule" }
+      "requires_manual_review": [
+        "post_add_vdom_link_interface"
+      ],
+      "no_reverse_needed": [
+        "post_login",
+        "post_logout"
       ]
     },
-
+    "Palo_Alto_Networks": {
+      "reversible": [],
+      "requires_manual_review": [
+        "post_block_outbound_ip",
+        "post_add_security_rule",
+        "post_create_application_object",
+        "post_commit_changes"
+      ],
+      "_note": "App ini tidak mengekspos aksi pembalik (tidak ada unblock/delete_rule). Semua aksi state-changing -> manual review."
+    },
+    "Cisco_ASA": {
+      "reversible": [
+        {
+          "action": "post_add_firewall_rule",
+          "reverse_action": "delete_rule"
+        }
+      ]
+    },
     "AWS_Network_Firewall": {
       "reversible": [
-        { "action": "post_createfirewall",        "reverse_action": "post_deletefirewall" },
-        { "action": "post_createfirewallpolicy",  "reverse_action": "post_deletefirewallpolicy" },
-        { "action": "post_createrulegroup",       "reverse_action": "post_deleterulegroup" },
-        { "action": "post_putresourcepolicy",     "reverse_action": "post_deleteresourcepolicy" },
-        { "action": "post_associatesubnets",      "reverse_action": "post_disassociatesubnets" },
-        { "action": "post_tagresource",           "reverse_action": "post_untagresource" }
+        {
+          "action": "post_createfirewall",
+          "reverse_action": "post_deletefirewall"
+        },
+        {
+          "action": "post_createfirewallpolicy",
+          "reverse_action": "post_deletefirewallpolicy"
+        },
+        {
+          "action": "post_createrulegroup",
+          "reverse_action": "post_deleterulegroup"
+        },
+        {
+          "action": "post_putresourcepolicy",
+          "reverse_action": "post_deleteresourcepolicy"
+        },
+        {
+          "action": "post_associatesubnets",
+          "reverse_action": "post_disassociatesubnets"
+        },
+        {
+          "action": "post_tagresource",
+          "reverse_action": "post_untagresource"
+        }
       ],
-      "requires_manual_review": ["post_associatefirewallpolicy", "post_updatefirewallpolicy", "post_updatefirewalldescription", "post_updaterulegroup"]
+      "requires_manual_review": [
+        "post_associatefirewallpolicy",
+        "post_updatefirewallpolicy",
+        "post_updatefirewalldescription",
+        "post_updaterulegroup"
+      ]
     },
-
     "FortiEDR": {
       "reversible": [
-        { "action": "put_isolate_collectors",  "reverse_action": "put_unisolate_collectors" },
-        { "action": "post_create_exception",   "reverse_action": "delete_exception" },
-        { "action": "post_creates_a_user",     "reverse_action": "deletes_a_user" },
-        { "action": "post_creates_an_ip_set",  "reverse_action": "deletes_an_ip_set" },
-        { "action": "post_creates_an_organization_in_the_system", "reverse_action": "deletes_an_organization_in_the_system" }
+        {
+          "action": "put_isolate_collectors",
+          "reverse_action": "put_unisolate_collectors"
+        },
+        {
+          "action": "post_create_exception",
+          "reverse_action": "delete_exception"
+        },
+        {
+          "action": "post_creates_a_user",
+          "reverse_action": "deletes_a_user"
+        },
+        {
+          "action": "post_creates_an_ip_set",
+          "reverse_action": "deletes_an_ip_set"
+        },
+        {
+          "action": "post_creates_an_organization_in_the_system",
+          "reverse_action": "deletes_an_organization_in_the_system"
+        }
       ],
-      "requires_manual_review": ["post_create_collector_group", "post_create_an_iot_group", "put_remediate_device", "put_resets_a_users_password", "put_toggle_collectors"]
+      "requires_manual_review": [
+        "post_create_collector_group",
+        "post_create_an_iot_group",
+        "put_remediate_device",
+        "put_resets_a_users_password",
+        "put_toggle_collectors"
+      ]
     },
-
     "Sophos_Central": {
       "reversible": [],
-      "requires_manual_review": ["post_perform_a_firewall_action", "patch_change_firewall_attributes", "delete_a_firewall"],
+      "requires_manual_review": [
+        "post_perform_a_firewall_action",
+        "patch_change_firewall_attributes",
+        "delete_a_firewall"
+      ],
       "_note": "Tidak ada pasangan create/delete bersih; post_perform_a_firewall_action bergantung sub-aksi -> manual."
     },
-
     "Microsoft_Entra_ID": {
       "reversible": [],
-      "needs_llm": ["patch_enable_or_disable_user"],
-      "requires_manual_review": ["post_reset_password", "post_revoke_user_sessions"],
+      "needs_llm": [
+        "patch_enable_or_disable_user"
+      ],
+      "requires_manual_review": [
+        "post_reset_password",
+        "post_revoke_user_sessions"
+      ],
       "_note": "enable/disable user adalah satu aksi dgn parameter -> LLM membalik nilai parameter (needs_llm). reset_password & revoke_sessions irreversibel -> manual."
     },
-
     "Wazuh": {
       "reversible": [
-        { "action": "post_add_user",     "reverse_action": "delete_users" },
-        { "action": "post_add_role",     "reverse_action": "delete_roles" },
-        { "action": "post_add_policy",   "reverse_action": "delete_policies" },
-        { "action": "post_add_security_rule", "reverse_action": "delete_security_rules" },
-        { "action": "post_create_a_group",    "reverse_action": "delete_groups" },
-        { "action": "post_add_agent",         "reverse_action": "delete_agents" },
-        { "action": "post_add_agent_full",    "reverse_action": "delete_agents" },
-        { "action": "post_add_agent_quick",   "reverse_action": "delete_agents" },
-        { "action": "post_add_policies_to_role",       "reverse_action": "delete_remove_policies_from_role" },
-        { "action": "post_add_roles_to_user",          "reverse_action": "delete_remove_roles_from_user" },
-        { "action": "post_add_security_rules_to_role", "reverse_action": "delete_remove_security_rules_from_role" },
-        { "action": "put_assign_agent_to_group",       "reverse_action": "delete_remove_agent_from_group" },
-        { "action": "put_assign_agents_to_group",      "reverse_action": "delete_remove_agents_from_group" }
+        {
+          "action": "post_add_user",
+          "reverse_action": "delete_users"
+        },
+        {
+          "action": "post_add_role",
+          "reverse_action": "delete_roles"
+        },
+        {
+          "action": "post_add_policy",
+          "reverse_action": "delete_policies"
+        },
+        {
+          "action": "post_add_security_rule",
+          "reverse_action": "delete_security_rules"
+        },
+        {
+          "action": "post_create_a_group",
+          "reverse_action": "delete_groups"
+        },
+        {
+          "action": "post_add_agent",
+          "reverse_action": "delete_agents"
+        },
+        {
+          "action": "post_add_agent_full",
+          "reverse_action": "delete_agents"
+        },
+        {
+          "action": "post_add_agent_quick",
+          "reverse_action": "delete_agents"
+        },
+        {
+          "action": "post_add_policies_to_role",
+          "reverse_action": "delete_remove_policies_from_role"
+        },
+        {
+          "action": "post_add_roles_to_user",
+          "reverse_action": "delete_remove_roles_from_user"
+        },
+        {
+          "action": "post_add_security_rules_to_role",
+          "reverse_action": "delete_remove_security_rules_from_role"
+        },
+        {
+          "action": "put_assign_agent_to_group",
+          "reverse_action": "delete_remove_agent_from_group"
+        },
+        {
+          "action": "put_assign_agents_to_group",
+          "reverse_action": "delete_remove_agents_from_group"
+        }
       ],
-      "requires_manual_review": ["put_restart_agent", "put_restart_manager", "put_upgrade_agents", "put_run_command", "put_run_custom_command", "put_revoke_jwt_tokens"]
+      "requires_manual_review": [
+        "put_restart_agent",
+        "put_restart_manager",
+        "put_upgrade_agents",
+        "put_run_command",
+        "put_run_custom_command",
+        "put_revoke_jwt_tokens"
+      ]
     },
-
     "Datadog": {
       "reversible": [
-        { "action": "post_create_a_monitor",            "reverse_action": "delete_a_monitor" },
-        { "action": "post_create_a_new_dashboard",      "reverse_action": "delete_a_dashboard" },
-        { "action": "post_create_a_dashboard_list",     "reverse_action": "delete_a_dashboard_list" },
-        { "action": "post_create_a_notebook",           "reverse_action": "delete_a_notebook" },
-        { "action": "post_create_a_pipeline",           "reverse_action": "delete_a_pipeline" },
-        { "action": "post_create_a_detection_rule",     "reverse_action": "delete_an_existing_rule" },
-        { "action": "post_create_a_security_filter",    "reverse_action": "delete_a_security_filter" },
-        { "action": "post_create_a_logbased_metric",    "reverse_action": "delete_a_logbased_metric" },
-        { "action": "post_create_a_restriction_query",  "reverse_action": "delete_a_restriction_query" },
-        { "action": "post_create_a_user",               "reverse_action": "delete_disable_a_user" },
-        { "action": "post_create_role",                 "reverse_action": "delete_role" },
-        { "action": "post_create_an_api_key",           "reverse_action": "delete_an_api_key" },
-        { "action": "post_create_an_application_key",   "reverse_action": "delete_an_application_key" },
-        { "action": "post_create_an_archive",           "reverse_action": "delete_an_archive" },
-        { "action": "post_create_a_webhooks_integration","reverse_action": "delete_a_webhook" },
-        { "action": "post_schedule_a_downtime",         "reverse_action": "delete_cancel_a_downtime" },
-        { "action": "post_mute_a_monitor",              "reverse_action": "post_unmute_a_monitor" },
-        { "action": "post_mute_a_host",                 "reverse_action": "post_unmute_a_host" },
-        { "action": "post_mute_all_monitors",           "reverse_action": "post_unmute_all_monitors" },
-        { "action": "post_add_a_user_to_a_role",        "reverse_action": "delete_remove_a_user_from_a_role" },
-        { "action": "post_add_tags_to_a_host",          "reverse_action": "delete_remove_host_tags" },
-        { "action": "post_add_items_to_a_dashboard_list","reverse_action": "delete_items_from_a_dashboard_list" },
-        { "action": "post_grant_permission_to_a_role",  "reverse_action": "delete_revoke_permission" },
-        { "action": "post_grant_role_to_a_restriction_query", "reverse_action": "delete_revoke_role_from_a_restriction_query" },
-        { "action": "post_grant_role_to_an_archive",    "reverse_action": "delete_revoke_role_from_an_archive" },
-        { "action": "post_create_a_slack_integration_channel", "reverse_action": "delete_remove_a_slack_integration_channel" }
+        {
+          "action": "post_create_a_monitor",
+          "reverse_action": "delete_a_monitor"
+        },
+        {
+          "action": "post_create_a_new_dashboard",
+          "reverse_action": "delete_a_dashboard"
+        },
+        {
+          "action": "post_create_a_dashboard_list",
+          "reverse_action": "delete_a_dashboard_list"
+        },
+        {
+          "action": "post_create_a_notebook",
+          "reverse_action": "delete_a_notebook"
+        },
+        {
+          "action": "post_create_a_pipeline",
+          "reverse_action": "delete_a_pipeline"
+        },
+        {
+          "action": "post_create_a_detection_rule",
+          "reverse_action": "delete_an_existing_rule"
+        },
+        {
+          "action": "post_create_a_security_filter",
+          "reverse_action": "delete_a_security_filter"
+        },
+        {
+          "action": "post_create_a_logbased_metric",
+          "reverse_action": "delete_a_logbased_metric"
+        },
+        {
+          "action": "post_create_a_restriction_query",
+          "reverse_action": "delete_a_restriction_query"
+        },
+        {
+          "action": "post_create_a_user",
+          "reverse_action": "delete_disable_a_user"
+        },
+        {
+          "action": "post_create_role",
+          "reverse_action": "delete_role"
+        },
+        {
+          "action": "post_create_an_api_key",
+          "reverse_action": "delete_an_api_key"
+        },
+        {
+          "action": "post_create_an_application_key",
+          "reverse_action": "delete_an_application_key"
+        },
+        {
+          "action": "post_create_an_archive",
+          "reverse_action": "delete_an_archive"
+        },
+        {
+          "action": "post_create_a_webhooks_integration",
+          "reverse_action": "delete_a_webhook"
+        },
+        {
+          "action": "post_schedule_a_downtime",
+          "reverse_action": "delete_cancel_a_downtime"
+        },
+        {
+          "action": "post_mute_a_monitor",
+          "reverse_action": "post_unmute_a_monitor"
+        },
+        {
+          "action": "post_mute_a_host",
+          "reverse_action": "post_unmute_a_host"
+        },
+        {
+          "action": "post_mute_all_monitors",
+          "reverse_action": "post_unmute_all_monitors"
+        },
+        {
+          "action": "post_add_a_user_to_a_role",
+          "reverse_action": "delete_remove_a_user_from_a_role"
+        },
+        {
+          "action": "post_add_tags_to_a_host",
+          "reverse_action": "delete_remove_host_tags"
+        },
+        {
+          "action": "post_add_items_to_a_dashboard_list",
+          "reverse_action": "delete_items_from_a_dashboard_list"
+        },
+        {
+          "action": "post_grant_permission_to_a_role",
+          "reverse_action": "delete_revoke_permission"
+        },
+        {
+          "action": "post_grant_role_to_a_restriction_query",
+          "reverse_action": "delete_revoke_role_from_a_restriction_query"
+        },
+        {
+          "action": "post_grant_role_to_an_archive",
+          "reverse_action": "delete_revoke_role_from_an_archive"
+        },
+        {
+          "action": "post_create_a_slack_integration_channel",
+          "reverse_action": "delete_remove_a_slack_integration_channel"
+        }
       ],
       "_note": "Datadog action sangat banyak (mayoritas get_/post_get -> no_reverse via heuristik). Daftar di atas adalah pasangan bernilai tinggi; sisanya ditangani heuristik / needs_llm."
     },
-
     "Elasticsearch": {
       "reversible": [
-        { "action": "post_create_a_document",         "reverse_action": "delete_document" },
-        { "action": "post_create_document_without_id","reverse_action": "delete_document" },
-        { "action": "post_index_a_document",          "reverse_action": "delete_document" },
-        { "action": "index_a_document_put",           "reverse_action": "delete_document" }
+        {
+          "action": "post_create_a_document",
+          "reverse_action": "delete_document"
+        },
+        {
+          "action": "post_create_document_without_id",
+          "reverse_action": "delete_document"
+        },
+        {
+          "action": "post_index_a_document",
+          "reverse_action": "delete_document"
+        },
+        {
+          "action": "index_a_document_put",
+          "reverse_action": "delete_document"
+        }
       ],
-      "requires_manual_review": ["post_update_document", "put_edit_a_document"]
+      "requires_manual_review": [
+        "post_update_document",
+        "put_edit_a_document"
+      ]
     },
-
     "FortiSIEM": {
       "reversible": [],
-      "requires_manual_review": ["post_add_watchlist_entry", "post_add_watchlist_group", "post_add_organization", "post_update_incidents", "post_delete_watchlist"],
+      "requires_manual_review": [
+        "post_add_watchlist_entry",
+        "post_add_watchlist_group",
+        "post_add_organization",
+        "post_update_incidents",
+        "post_delete_watchlist"
+      ],
       "_note": "Tidak ada pasangan delete per-entry; add_* -> manual review."
     },
-
-    "Shuffle Tools":      { "default_status": "no_reverse_needed", "_note": "Utilitas/glue workflow, tidak mengubah state eksternal." },
-    "Shuffle AI":         { "default_status": "no_reverse_needed" },
-    "ShuffleHealthcheck": { "default_status": "no_reverse_needed", "_note": "Manajemen platform; bukan aksi respons keamanan." },
-    "http":               { "default_status": "no_reverse_needed", "_note": "GET/POST/PUT/DELETE generik; pembalikan tidak terdefinisi -> dilewati (atau manual bila perlu)." },
-    "email":              { "default_status": "no_reverse_needed", "_note": "Pengiriman email/SMS tidak dapat dibatalkan." }
+    "Shuffle Tools": {
+      "default_status": "no_reverse_needed",
+      "_note": "Utilitas/glue workflow, tidak mengubah state eksternal."
+    },
+    "Shuffle AI": {
+      "default_status": "no_reverse_needed"
+    },
+    "ShuffleHealthcheck": {
+      "default_status": "no_reverse_needed",
+      "_note": "Manajemen platform; bukan aksi respons keamanan."
+    },
+    "http": {
+      "default_status": "no_reverse_needed",
+      "_note": "GET/POST/PUT/DELETE generik; pembalikan tidak terdefinisi -> dilewati (atau manual bila perlu)."
+    },
+    "email": {
+      "default_status": "no_reverse_needed",
+      "_note": "Pengiriman email/SMS tidak dapat dibatalkan."
+    }
   }
 }

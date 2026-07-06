@@ -2,7 +2,6 @@
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
-# ---------- Auth ----------
 class LoginRequest(BaseModel):
     username: str
     password: str
@@ -13,7 +12,6 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
-# ---------- Recommend (forward) ----------
 class RecommendRequest(BaseModel):
     query: str = Field(..., description="Analyst's natural-language situation")
     top_k: int = 3
@@ -27,7 +25,7 @@ class PlaybookHit(BaseModel):
     category: str
     description: str
     score: float
-    confidence: str               # high | medium | low
+    confidence: str
     explanation: Optional[str] = None
     steps: Optional[list[dict]] = None
 
@@ -39,15 +37,13 @@ class RecommendResponse(BaseModel):
     notes: Optional[str] = None
 
 
-# ---------- Explain ----------
 class ExplainResponse(BaseModel):
     slug: str
     name: str
     summary: str
-    step_explanations: list[dict]   # {order, title, what, why}
+    step_explanations: list[dict]
 
 
-# ---------- Generate (reverse) ----------
 class GenerateRequest(BaseModel):
     description: str
     target_integrations: list[str] = []
@@ -61,16 +57,14 @@ class GenerateResponse(BaseModel):
     shuffle_workflow: Optional[dict] = None
     deployed: bool = False
     deployment_id: Optional[str] = None
-    # When generation is not possible OR an error occurred, we recommend an action
     fallback_action: Optional["ActionRecommendation"] = None
     error: Optional[str] = None
 
 
-# ---------- Action Recommender ----------
 class ActionRecommendation(BaseModel):
-    trigger: str                    # generation_not_possible | error | deployment_failed
+    trigger: str
     reason: str
-    recommended_actions: list[dict] # {priority, action, detail}
+    recommended_actions: list[dict]
     closest_playbook: Optional[str] = None
 
 
@@ -80,7 +74,6 @@ class ActionRequest(BaseModel):
     attempted_description: Optional[str] = None
 
 
-# ---------- Feedback ----------
 class FeedbackRequest(BaseModel):
     query: str
     playbook_slug: str
@@ -88,11 +81,10 @@ class FeedbackRequest(BaseModel):
     rank: Optional[int] = None
 
 
-# ---------- Reverese Workflow Service ----------
 class RetryError(BaseModel):
     """Single validation error forwarded from Node.js on retry attempts."""
-    code:     str            # e.g. "MISSING_FIELD", "INVALID_ACTION_NAME", "IMPORT_ERROR"
-    location: str            # e.g. "actions[0]", "root", "llm_service"
+    code:     str
+    location: str
     message:  str
  
  
@@ -112,9 +104,9 @@ class ReverseWorkflowRequest(BaseModel):
     Request from reverse-workflow-service (Node.js) at Step 5.
     The workflow graph must already be saved to Neo4j (done at Step 4).
     """
-    workflow_id:    str                      # Shuffle workflow UUID
-    workflow_name:  str                      # Human-readable name
-    retry_context:  Optional[RetryContext] = None  # None on first call
+    workflow_id:    str
+    workflow_name:  str
+    retry_context:  Optional[RetryContext] = None
  
  
 class ReverseWorkflowResponse(BaseModel):
@@ -123,8 +115,9 @@ class ReverseWorkflowResponse(BaseModel):
     raw_output is the Ollama response string (may contain markdown code fences —
     Node.js strips them before JSON.parse()).
     """
-    raw_output: Optional[str] = None   # Raw Ollama output on success
-    error:      Optional[str] = None   # Error message on failure
+    raw_output: Optional[str] = None
+    error:      Optional[str] = None
+    prompt:     Optional[str] = None
 
 
 RecommendResponse.model_rebuild()

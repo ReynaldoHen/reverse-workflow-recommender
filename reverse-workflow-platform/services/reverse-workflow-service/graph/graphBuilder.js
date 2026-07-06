@@ -22,9 +22,6 @@ const buildGraph = (parsedWorkflow, workflowId, workflowName) => {
     relationships: [],
   }
 
-  // ─────────────────────────────────────────────
-  // WORKFLOW NODE
-  // ─────────────────────────────────────────────
   graph.nodes.push({
     id: workflowId,
     type: "WORKFLOW",
@@ -41,9 +38,6 @@ const buildGraph = (parsedWorkflow, workflowId, workflowName) => {
     const role = inferRole(node)
     const actionName = node.action_name || node.label || ""
 
-    // ─────────────────────────────
-    // ACTION NODE
-    // ─────────────────────────────
     graph.nodes.push({
       id: node.id,
       type: "ACTION",
@@ -62,9 +56,6 @@ const buildGraph = (parsedWorkflow, workflowId, workflowName) => {
       },
     })
 
-    // ─────────────────────────────
-    // WORKFLOW → ACTION
-    // ─────────────────────────────
     graph.relationships.push({
       source: workflowId,
       target: node.id,
@@ -72,9 +63,6 @@ const buildGraph = (parsedWorkflow, workflowId, workflowName) => {
       properties: { label: "workflow_contains_action" }
     })
 
-    // ─────────────────────────────
-    // ACTION → APP (ONLY IF EXISTS)
-    // ─────────────────────────────
     if (node.app_id) {
       graph.relationships.push({
         source: node.id,
@@ -84,9 +72,6 @@ const buildGraph = (parsedWorkflow, workflowId, workflowName) => {
       })
     }
 
-    // ─────────────────────────────
-    // REVERSE_ACTION NODE + HAS_REVERSE (pemetaan reverse eksplisit di graph)
-    // ─────────────────────────────
     const rev = resolveReverse(actionName, node.app_name || "")
     const revId = `REV_${node.id}`
 
@@ -100,7 +85,7 @@ const buildGraph = (parsedWorkflow, workflowId, workflowName) => {
         reverse_action_name: rev.reverse_action_name,
         app_name: node.app_name || "",
         app_id: node.app_id || "",
-        status: rev.status,           // auto_mapped | needs_llm | requires_manual_review
+        status: rev.status,
         reason: rev.reason
       },
     })
@@ -113,16 +98,13 @@ const buildGraph = (parsedWorkflow, workflowId, workflowName) => {
     })
   })
 
-  // ─────────────────────────────
-  // EDGE RELATIONSHIPS (FLOW LOGIC)
-  // ─────────────────────────────
   parsedWorkflow.edges.forEach((edge) => {
     graph.relationships.push({
       source: edge.source,
       target: edge.target,
       type: "NEXT",
       properties: {
-        condition: edge.conditions || "",
+        condition: typeof edge.conditions === "string" ? edge.conditions : JSON.stringify(edge.conditions || []),
         label: edge.label || ""
       },
     })

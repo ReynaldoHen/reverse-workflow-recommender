@@ -2,12 +2,8 @@ const safe = (val, fallback = "") => {
   return val === undefined || val === null ? fallback : val
 }
 
-// fungsi untuk parsing data actions dan branches menjadi nodes & edges
 const parseWorkflow = (actions, branches) => {
 
-  // ─────────────────────────────────────────────
-  // NORMALIZE NODES
-  // ─────────────────────────────────────────────
   const nodes = actions.map((action) => {
     return {
       id: safe(action.id),
@@ -24,9 +20,6 @@ const parseWorkflow = (actions, branches) => {
     }
   })
 
-  // ─────────────────────────────────────────────
-  // NORMALIZE EDGES
-  // ─────────────────────────────────────────────
   const edges = branches.map((branch) => {
     return {
       source: safe(branch.source_id),

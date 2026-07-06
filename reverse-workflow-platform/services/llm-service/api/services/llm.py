@@ -18,11 +18,18 @@ class LLM:
             "prompt": prompt,
             "system": system,
             "stream": False,
-            "options": {"temperature": settings.llm_temperature if temperature is None else temperature},
+            "think": settings.llm_think,
+            "options": {
+                "temperature": settings.llm_temperature if temperature is None else temperature,
+                "top_p": settings.llm_top_p,
+                "top_k": settings.llm_top_k,
+                "presence_penalty": settings.llm_presence_penalty,
+                "num_predict": settings.llm_num_predict,
+                "num_ctx": settings.llm_num_ctx,
+            },
         }
-        # IMPORTANT: do NOT pass timeout= to AsyncClient() — it conflicts with
-        # the per-request Timeout below and whichever is smaller wins silently.
-        # Drive everything from one explicit Timeout object on the request only.
+        if settings.llm_format:
+            payload["format"] = settings.llm_format
         timeout = httpx.Timeout(
             connect=10.0,
             read=float(settings.ollama_read_timeout),
@@ -32,7 +39,30 @@ class LLM:
         async with httpx.AsyncClient() as client:
             resp = await client.post(self._url, json=payload, timeout=timeout)
             resp.raise_for_status()
-            return resp.json().get("response", "")
+            data = resp.json()
+            raw = data.get("response", "") or ""
+            thinking = data.get("thinking", "") or ""
+            print(f"[llm] raw response len={len(raw)} thinking len={len(thinking)}")
+            if not raw.strip():
+                print(f"[llm] EMPTY response. thinking_preview={thinking[:300]!r}")
+            return self._strip_thinking(raw)
+
+    @staticmethod
+    def _strip_thinking(text: str) -> str:
+        """Buang blok reasoning Qwen3 agar tersisa konten/JSON.
+
+        Menangani <think>...</think> lengkap maupun penutup </think> saja.
+        JANGAN kembalikan string kosong bila pembersihan menghapus segalanya —
+        kembalikan teks asli agar pemanggil (_extract_json) tetap bisa mencari JSON.
+        """
+        if not text:
+            return text
+        original = text
+        cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+        if "</think>" in cleaned:
+            cleaned = cleaned.split("</think>", 1)[1]
+        cleaned = cleaned.strip()
+        return cleaned if cleaned else original.strip()
 
     async def complete_json(self, prompt: str, system: str = "") -> dict:
         """Ask the model for JSON, retry, then fall back to regex extraction."""

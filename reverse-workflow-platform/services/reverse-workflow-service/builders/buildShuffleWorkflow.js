@@ -1,22 +1,8 @@
-/**
- * buildShuffleWorkflow.js
- * AI Workflow Compiler: Semantic Workflow Plan → Shuffle Workflow JSON
- *
- * Analogi compiler architecture:
- *   Semantic Workflow Plan (IR dari LLM)  →  buildShuffleWorkflow()  →  Shuffle JSON (executable)
- *
- * Input  : Semantic Workflow Plan (output LLM)
- * Output : Valid Shuffle Workflow JSON → diimport via POST /api/v1/workflows
- */
-
 const { v4: uuidv4 } = require("uuid");
 const axios = require("axios");
 const path  = require("path");
 require("dotenv").config({ path: path.resolve(__dirname, "../../.env") });
 
-// ─────────────────────────────────────────────
-// PARAMETER COMPILER
-// ─────────────────────────────────────────────
 function compileParameter(param) {
   return {
     name:          param.name        || "",
@@ -42,9 +28,6 @@ function compileParameter(param) {
   };
 }
 
-// ─────────────────────────────────────────────
-// ACTION COMPILER
-// ─────────────────────────────────────────────
 function compileAction(step, defaultEnvironment) {
   return {
     id:    step.step_id,
@@ -87,9 +70,6 @@ function compileAction(step, defaultEnvironment) {
   };
 }
 
-// ─────────────────────────────────────────────
-// BRANCH COMPILER
-// ─────────────────────────────────────────────
 function compileBranch(connection) {
   let conditions = [];
   if (Array.isArray(connection.condition)) {
@@ -111,9 +91,6 @@ function compileBranch(connection) {
   };
 }
 
-// ─────────────────────────────────────────────
-// SAFETY NETS
-// ─────────────────────────────────────────────
 function ensureStepIds(steps) {
   steps.forEach((step) => {
     if (!step.step_id) step.step_id = uuidv4();
@@ -137,9 +114,6 @@ function buildLinearConnections(steps) {
   }));
 }
 
-// ─────────────────────────────────────────────
-// MAIN COMPILER
-// ─────────────────────────────────────────────
 function buildShuffleWorkflow(plan) {
   if (!plan.steps || plan.steps.length === 0) {
     throw new Error("[compiler] Plan harus memiliki minimal 1 step.");
@@ -216,11 +190,6 @@ function buildShuffleWorkflow(plan) {
   };
 }
 
-// ─────────────────────────────────────────────
-// SHUFFLE IMPORTER
-// API key dibaca di dalam fungsi (bukan module level)
-// agar selalu dapat nilai terbaru dari process.env
-// ─────────────────────────────────────────────
 async function importWorkflowToShuffle(workflowJson) {
   const SHUFFLE_API_URL     = process.env.SHUFFLE_API_URL;
   const SHUFFLE_API_KEY = process.env.SHUFFLE_API_KEY || "";
@@ -232,9 +201,6 @@ async function importWorkflowToShuffle(workflowJson) {
   const url = `${SHUFFLE_API_URL}/api/v1/workflows`;
 
   console.log("[importer] Connecting to:", url);
-  console.log("[importer] API_KEY:", `'${SHUFFLE_API_KEY}'`);
-  console.log("[importer] API_KEY length:", SHUFFLE_API_KEY.length);
-  console.log("[importer] Payload size:", JSON.stringify(workflowJson).length, "bytes");
   console.log("[importer] Workflow id:", workflowJson.id);
   console.log("[importer] Actions count:", workflowJson.actions.length);
 
@@ -260,9 +226,6 @@ async function importWorkflowToShuffle(workflowJson) {
   }
 }
 
-// ─────────────────────────────────────────────
-// EXPORTS
-// ─────────────────────────────────────────────
 module.exports = {
   buildShuffleWorkflow,
   importWorkflowToShuffle,

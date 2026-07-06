@@ -28,7 +28,6 @@ async def add_playbook(payload: dict, db=Depends(get_db), user: str = Depends(cu
         slug=payload["slug"], name=payload["name"], category=payload["category"],
         description=payload["description"], steps=payload.get("steps", []),
         apps=payload.get("apps", []),
-        # FIX: json round-trip ensures valid JSON in the JSONB column, not dict repr
         shuffle_json=json.loads(json.dumps(payload.get("shuffle_json"))) if payload.get("shuffle_json") else None,
     )
     db.add(pb); db.commit()
