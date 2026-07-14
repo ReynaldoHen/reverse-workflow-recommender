@@ -468,6 +468,24 @@
       ],
       "_note": "Tidak ada pasangan delete per-entry; add_* -> manual review."
     },
+    "Microsoft_Graph": {
+      "reversible": [],
+      "needs_llm": [
+        "patch_enable_or_disable_user"
+      ],
+      "no_reverse_needed": [
+        "post_microsoft_graph_api_get_user",
+        "post_microsoft_graph_api_get_license_details",
+        "post_microsoft_graph_security_api_get_alert",
+        "post_microsoft_graph_security_api_list_alerts"
+      ],
+      "requires_manual_review": [
+        "post_microsoft_graph_api_assign_and_remove_license",
+        "post_microsoft_graph_api_revoke_user_session",
+        "post_microsoft_graph_security_api_update_alert"
+      ],
+      "_note": "Nama app di Neo4j = 'Microsoft Graph' (dinormalkan -> microsoft_graph). Sejumlah action READ diberi prefix 'post_' oleh konektor (mis. post_..._get_user, post_..._list_alerts) sehingga TIDAK tertangkap heuristik no_reverse_prefixes; karena itu didaftarkan eksplisit di no_reverse_needed. Action stateful/irreversibel (assign_and_remove_license, revoke_user_session, update_alert) -> manual review."
+    },
     "Shuffle Tools": {
       "default_status": "no_reverse_needed",
       "_note": "Utilitas/glue workflow, tidak mengubah state eksternal."

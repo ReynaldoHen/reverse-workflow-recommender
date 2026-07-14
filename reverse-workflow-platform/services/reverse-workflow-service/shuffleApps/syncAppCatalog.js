@@ -56,7 +56,7 @@ async function syncAppCatalog() {
   console.log("[apps] ── App Catalog Sync ──────────────────")
   console.log(`[apps] TTL = ${TTL_HOURS}h`)
 
-  // const { needed } = await checkSyncNeeded()
+  const { needed } = await checkSyncNeeded()
 
   if (!needed) {
     return { success: true, skipped: true }

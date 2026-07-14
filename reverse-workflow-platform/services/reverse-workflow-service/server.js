@@ -57,6 +57,26 @@ app.post("/api/reverse-workflow", async (req, res) => {
       maxRetries: 3
     })
 
+    // Kasus khusus: tidak ada aksi yang perlu dibalik (semua read-only/utilitas).
+    // Ini hasil SUKSES yang benar (no_auto_reverse), bukan kegagalan — tidak ada
+    // workflow yang diimpor ke Shuffle sehingga importResult null. Jangan akses .id.
+    if (!llmResult.importResult || llmResult.note === "no_auto_reverse") {
+      setStatus(workflow_id, "success", {
+        note: "no_auto_reverse",
+        review_required: llmResult.review_required || []
+      })
+      return res.json({
+        success: true,
+        workflow_id,
+        generated_workflow_id: null,
+        generated_workflow_name: null,
+        attempts: llmResult.attempts,
+        review_required: llmResult.review_required || [],
+        note: "no_auto_reverse",
+        message: "Tidak ada aksi yang memerlukan pembalikan (seluruh aksi read-only/utilitas). Tidak ada reverse workflow yang dibuat."
+      })
+    }
+
     setStatus(workflow_id, "success", {
       generated_workflow_id: llmResult.importResult.id,
       review_required: llmResult.review_required || []
