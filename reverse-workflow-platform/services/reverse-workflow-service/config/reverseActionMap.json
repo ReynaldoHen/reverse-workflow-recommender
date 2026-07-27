@@ -486,6 +486,216 @@
       ],
       "_note": "Nama app di Neo4j = 'Microsoft Graph' (dinormalkan -> microsoft_graph). Sejumlah action READ diberi prefix 'post_' oleh konektor (mis. post_..._get_user, post_..._list_alerts) sehingga TIDAK tertangkap heuristik no_reverse_prefixes; karena itu didaftarkan eksplisit di no_reverse_needed. Action stateful/irreversibel (assign_and_remove_license, revoke_user_session, update_alert) -> manual review."
     },
+    "Slack": {
+      "reversible": [
+        {
+          "action": "post_conversations_open",
+          "reverse_action": "post_conversations_close"
+        },
+        {
+          "action": "post_conversations_join",
+          "reverse_action": "post_conversations_leave"
+        },
+        {
+          "action": "post_conversations_unarchive",
+          "reverse_action": "post_conversations_archive"
+        },
+        {
+          "action": "post_conversations_invite",
+          "reverse_action": "post_conversations_kick"
+        },
+        {
+          "action": "post_pins_add",
+          "reverse_action": "post_pins_remove"
+        },
+        {
+          "action": "post_stars_add",
+          "reverse_action": "post_stars_remove"
+        },
+        {
+          "action": "post_reactions_add",
+          "reverse_action": "post_reactions_remove"
+        },
+        {
+          "action": "post_reminders_add",
+          "reverse_action": "post_reminders_delete"
+        },
+        {
+          "action": "post_usergroups_enable",
+          "reverse_action": "post_usergroups_disable"
+        },
+        {
+          "action": "post_admin_conversations_archive",
+          "reverse_action": "post_admin_conversations_unarchive"
+        },
+        {
+          "action": "post_files_remote_add",
+          "reverse_action": "post_files_remote_remove"
+        },
+        {
+          "action": "post_files_sharedpublicurl",
+          "reverse_action": "post_files_revokepublicurl"
+        },
+        {
+          "action": "post_dnd_setsnooze",
+          "reverse_action": "post_dnd_endsnooze"
+        },
+        {
+          "action": "post_admin_emoji_add",
+          "reverse_action": "post_admin_emoji_remove"
+        },
+        {
+          "action": "post_admin_usergroups_addchannels",
+          "reverse_action": "post_admin_usergroups_removechannels"
+        },
+        {
+          "action": "post_admin_conversations_restrictaccess_addgroup",
+          "reverse_action": "post_admin_conversations_restrictaccess_removegroup"
+        },
+        {
+          "action": "post_admin_users_invite",
+          "reverse_action": "post_admin_users_remove"
+        },
+        {
+          "action": "post_calls_add",
+          "reverse_action": "post_calls_end"
+        },
+        {
+          "action": "post_calls_participants_add",
+          "reverse_action": "post_calls_participants_remove"
+        },
+        {
+          "action": "post_users_setphoto",
+          "reverse_action": "post_users_deletephoto"
+        },
+        {
+          "action": "post_pins_remove",
+          "reverse_action": "post_pins_add"
+        },
+        {
+          "action": "post_stars_remove",
+          "reverse_action": "post_stars_add"
+        },
+        {
+          "action": "post_reactions_remove",
+          "reverse_action": "post_reactions_add"
+        },
+        {
+          "action": "post_conversations_leave",
+          "reverse_action": "post_conversations_join"
+        },
+        {
+          "action": "post_conversations_close",
+          "reverse_action": "post_conversations_open"
+        },
+        {
+          "action": "post_files_remote_remove",
+          "reverse_action": "post_files_remote_add"
+        },
+        {
+          "action": "post_usergroups_disable",
+          "reverse_action": "post_usergroups_enable"
+        },
+        {
+          "action": "post_dnd_endsnooze",
+          "reverse_action": "post_dnd_setsnooze"
+        },
+        {
+          "action": "post_admin_usergroups_removechannels",
+          "reverse_action": "post_admin_usergroups_addchannels"
+        },
+        {
+          "action": "post_admin_conversations_restrictaccess_removegroup",
+          "reverse_action": "post_admin_conversations_restrictaccess_addgroup"
+        },
+        {
+          "action": "post_admin_emoji_remove",
+          "reverse_action": "post_admin_emoji_add"
+        },
+        {
+          "action": "post_calls_participants_remove",
+          "reverse_action": "post_calls_participants_add"
+        }
+      ],
+      "needs_llm": [
+        "custom_action"
+      ],
+      "no_reverse_needed": [
+        "team_profile_get",
+        "users_profile_get",
+        "users_getpresence",
+        "reactions_get",
+        "chat_getpermalink",
+        "admin_conversations_getconversationprefs",
+        "admin_conversations_getteams",
+        "post_chat_unfurl",
+        "post_conversations_mark"
+      ],
+      "requires_manual_review": [
+        "chat_postephemeral",
+        "chat_postmessage",
+        "post_admin_apps_approve",
+        "post_admin_apps_restrict",
+        "post_admin_conversations_converttoprivate",
+        "post_admin_conversations_create",
+        "post_admin_conversations_delete",
+        "post_admin_conversations_disconnectshared",
+        "post_admin_conversations_invite",
+        "post_admin_conversations_rename",
+        "post_admin_conversations_setconversationprefs",
+        "post_admin_conversations_setteams",
+        "post_admin_conversations_unarchive",
+        "post_admin_emoji_addalias",
+        "post_admin_emoji_rename",
+        "post_admin_inviterequests_approve",
+        "post_admin_inviterequests_deny",
+        "post_admin_teams_create",
+        "post_admin_teams_settings_setdefaultchannels",
+        "post_admin_teams_settings_setdescription",
+        "post_admin_teams_settings_setdiscoverability",
+        "post_admin_teams_settings_seticon",
+        "post_admin_teams_settings_setname",
+        "post_admin_usergroups_addteams",
+        "post_admin_users_assign",
+        "post_admin_users_remove",
+        "post_admin_users_session_invalidate",
+        "post_admin_users_session_reset",
+        "post_admin_users_setadmin",
+        "post_admin_users_setexpiration",
+        "post_admin_users_setowner",
+        "post_admin_users_setregular",
+        "post_archive_converstaion",
+        "post_calls_end",
+        "post_calls_update",
+        "post_chat_delete",
+        "post_chat_deletescheduledmessage",
+        "post_chat_memessage",
+        "post_chat_schedulemessage",
+        "post_chat_update",
+        "post_conversations_archive",
+        "post_conversations_create",
+        "post_conversations_kick",
+        "post_conversations_rename",
+        "post_conversations_setpurpose",
+        "post_conversations_settopic",
+        "post_dnd_enddnd",
+        "post_files_comments_delete",
+        "post_files_delete",
+        "post_files_remote_update",
+        "post_files_revokepublicurl",
+        "post_files_upload",
+        "post_reminders_complete",
+        "post_reminders_delete",
+        "post_usergroups_create",
+        "post_usergroups_update",
+        "post_usergroups_users_update",
+        "post_users_deletephoto",
+        "post_users_profile_set",
+        "post_users_setactive",
+        "post_users_setpresence"
+      ],
+      "_note": "Nama app di Neo4j = 'Slack' (dinormalkan -> slack). Slack memiliki banyak action; action read (get_/list_/search_) tertangkap heuristik no_reverse_prefixes, dan action destruktif (delete_/post_delete/reset_) tertangkap manual_review_prefixes. Yang didaftarkan eksplisit di sini: (1) pasangan reversible yang jelas seperti conversations_open/close, pins_add/remove, reactions_add/remove; (2) action READ berprefiks non-standar (mis. team_profile_get, users_getpresence, chat_getpermalink) yang lolos heuristik; (3) action tulis/konfigurasi tanpa pembalik aman (set/update/kirim pesan) -> manual review. Action pengiriman pesan (chat_postmessage, chat_postephemeral, post_chat_schedulemessage) dimasukkan ke manual review agar analis memutuskan koreksi/penghapusan pesan."
+    },
     "Shuffle Tools": {
       "default_status": "no_reverse_needed",
       "_note": "Utilitas/glue workflow, tidak mengubah state eksternal."

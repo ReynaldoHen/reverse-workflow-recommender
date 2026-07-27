@@ -1,8 +1,3 @@
-"""Reverse pipeline: query Neo4j graph (+ pemetaan HAS_REVERSE) -> bangun prompt
-berbasis pemetaan reverse -> Ollama -> raw Shuffle workflow JSON.
-
-Dipanggil oleh endpoint POST /generate/reverse. RAG/Qdrant sudah dihapus.
-"""
 import json
 import logging
 import time
