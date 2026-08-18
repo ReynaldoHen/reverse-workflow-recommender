@@ -1,9 +1,3 @@
-"""Optional Shuffle custom app: calls this recommender from inside a Shuffle workflow.
-
-Drop this into a Shuffle custom app so analysts can call /recommend and
-/generate directly from a Shuffle node. Pseudocode shape — adapt to the
-Shuffle WALKOFF SDK version in your environment.
-"""
 import requests
 
 API = "http://playbook-api:8000/api/v1"

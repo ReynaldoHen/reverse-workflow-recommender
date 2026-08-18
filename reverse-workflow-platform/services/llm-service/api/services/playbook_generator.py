@@ -13,18 +13,6 @@ from .graph_retrieval import graph_retrieval
 logger = logging.getLogger(__name__)
 
 async def _get_workflow_graph(workflow_id: str) -> List[Dict[str, Any]]:
-    """
-    Query Neo4j untuk Action nodes yang disimpan oleh Node.js di Step 4.
-
-    Node.js graphBuilder.js membuat:
-      (:ACTION {action_id, label, app_name, action_name, app_id, app_version,
-                role, position, is_start, parameters})
-      -[:NEXT {condition}]->(:ACTION)
-
-    PENTING: app_name / app_id / app_version dibaca dari properti ACTION langsung
-    (bukan dari (:APP) via USES_APP) — field-field itu selalu ada di ACTION node.
-    large_image dibaca dari APP node karena graphBuilder tidak menyimpannya di ACTION.
-    """
     driver = AsyncGraphDatabase.driver(
         settings.neo4j_uri,
         auth=settings.neo4j_auth,
@@ -76,8 +64,6 @@ async def _get_workflow_graph(workflow_id: str) -> List[Dict[str, Any]]:
 
 
 def _summarize_config(parameters_raw) -> str:
-    """Ringkas konfigurasi (parameter) action agar LLM bisa menyimpulkan kebalikannya.
-    parameters_raw bisa JSON string (dari Neo4j) atau list."""
     try:
         params = parameters_raw if isinstance(parameters_raw, list) else json.loads(parameters_raw or "[]")
     except Exception:
@@ -101,14 +87,6 @@ def _build_reverse_system_prompt(
     rev_by_id: Dict[str, Dict[str, Any]],
     retry_context: Optional[Any],
 ) -> str:
-    """Bangun system prompt reverse berbasis PEMETAAN (HAS_REVERSE), tanpa RAG.
-
-    Untuk tiap source action (urutan dibalik), prompt memberi tahu LLM reverse
-    action yang harus dikeluarkan sesuai status pemetaan:
-      - auto_mapped            -> keluarkan action name = reverse_action_name
-      - needs_llm              -> LLM menyimpulkan kebalikan; jika ragu, manual review
-      - requires_manual_review -> OMIT dari output (ditandai untuk review terpisah, jangan mengarang)
-    """
     reversed_records = list(reversed(graph_records))
 
     kept = []
@@ -216,12 +194,6 @@ Output ONLY the JSON object now."""
 
 
 def _sanitize_workflow(json_str: str) -> str:
-    """
-    Bersihkan output LLM sebelum dikembalikan ke Node.js:
-    - Hapus branches dengan source_id atau destination_id kosong/null
-      (LLM kadang membuat "terminal branch" untuk action terakhir yang
-       seharusnya tidak punya outgoing branch sama sekali)
-    """
     try:
         workflow = json.loads(json_str)
         original_count = len(workflow.get("branches", []))
@@ -239,15 +211,6 @@ def _sanitize_workflow(json_str: str) -> str:
 
 
 def _extract_json(raw: str) -> str:
-    """
-    Strip preamble text and markdown fences dari LLM output.
-    LLM kadang menulis "Here is the JSON:\n```\n{...}\n```" walau sudah diperintah tidak.
-
-    Priority:
-    1. Direct parse (sudah bersih)
-    2. Ekstrak dari markdown code fence  ```...```
-    3. Potong dari karakter '{' pertama sampai '}' terakhir
-    """
     if not raw:
         return raw
 
@@ -281,13 +244,6 @@ def _extract_json(raw: str) -> str:
 
 
 def _inject_large_images(raw_json_str: str, graph_records: List[Dict[str, Any]]) -> str:
-    """
-    Setelah Ollama generate JSON, inject large_image yang benar untuk setiap action
-    berdasarkan app_id, menggunakan data dari graph_records (sudah ada di memori).
-
-    Juga membersihkan preamble/markdown fence dari output LLM.
-    Returns: clean JSON string dengan large_image ter-inject.
-    """
     app_image_map: Dict[str, str] = {}
     for rec in graph_records:
         app_id     = rec.get("app_id")
@@ -315,16 +271,6 @@ async def generate_reverse_from_graph(
     retry_context: Optional[Any] = None,
     db=None,
 ) -> tuple:
-    """
-    Generate reverse Shuffle workflow JSON menggunakan:
-      1. Workflow graph dari Neo4j (disimpan Node.js di Step 4), termasuk
-         pemetaan HAS_REVERSE -> REVERSE_ACTION (auto_mapped / needs_llm /
-         requires_manual_review).
-      2. Ollama (local LLM) via llm.complete().
-
-    Returns (raw_output, prompt) — Node.js akan parse, validasi, import; prompt
-    untuk dokumentasi/paper.
-    """
     attempt_num = retry_context.attempt if retry_context else 1
     logger.info(
         "[playbook_generator] generate_reverse_from_graph  id=%s  attempt=%d",

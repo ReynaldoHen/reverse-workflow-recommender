@@ -1,9 +1,3 @@
-"""Offline Shuffle app registry with real, stable app IDs.
-
-Resolves human app keys (e.g. "virustotal") to Shuffle app IDs and known
-actions. Can sync live from a connected Shuffle instance to pick up the apps
-actually installed there.
-"""
 import hashlib
 
 BUILTIN = {
@@ -82,11 +76,6 @@ class AppRegistry:
         return list(self._apps.values())
 
     def merge_from_shuffle(self, shuffle_apps: list[dict]):
-        """Merge live apps from GET /api/v1/apps.
-
-        Shuffle's WorkflowApp JSON (shuffle-shared) exposes: id, name,
-        app_version, large_image, categories, actions:[{name,...}].
-        """
         for a in shuffle_apps or []:
             name = (a.get("name") or "").strip().lower().replace(" ", "_")
             if not name:

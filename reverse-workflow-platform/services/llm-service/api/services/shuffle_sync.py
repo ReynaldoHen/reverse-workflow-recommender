@@ -1,4 +1,3 @@
-"""Background sync of apps/workflows from a live Shuffle instance."""
 import asyncio
 import json
 from ..config import get_settings

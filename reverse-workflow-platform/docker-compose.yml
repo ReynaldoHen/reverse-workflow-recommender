@@ -61,21 +61,17 @@ services:
     env_file: .env
     environment:
       SECRET_KEY: ${LLM_SECRET_KEY:-change-me-in-env}
-      # postgres (shared instance, same creds as the orchestrator)
       POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
       POSTGRES_PORT: ${POSTGRES_PORT:-5432}
       POSTGRES_DB: ${POSTGRES_DB:-reverser}
       POSTGRES_USER: ${POSTGRES_USER:-reverser}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      # neo4j
       NEO4J_URI: ${NEO4J_URI:-bolt://neo4j:7687}
       NEO4J_USERNAME: ${NEO4J_USERNAME:-neo4j}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
       NEO4J_DATABASE: ${NEO4J_DATABASE:-neo4j}
-      # ollama
       OLLAMA_HOST: http://ollama:11434
       LLM_MODEL: ${LLM_MODEL:-dengcao/Qwen3-8B:Q5_K_M}
-      # shuffle (optional; offline-ok by default)
       SHUFFLE_API_URL: ${SHUFFLE_API_URL:-}
       SHUFFLE_API_KEY: ${SHUFFLE_API_KEY:-}
     ports:
@@ -91,7 +87,6 @@ services:
         condition: service_started
     restart: unless-stopped
 
-  # ───────────────────────────── Neo4j ──────────────────────────────────────
   neo4j:
     image: neo4j:5
     container_name: rwp-neo4j
@@ -112,7 +107,6 @@ services:
       retries: 12
     restart: unless-stopped
 
-  # ───────────────────────────── Postgres ───────────────────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: rwp-postgres
@@ -124,7 +118,6 @@ services:
       - "5432:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
-      # Python service's schema (idempotent; SQLAlchemy also creates it on boot)
       - ./services/llm-service/scripts/init_db.sql:/docker-entrypoint-initdb.d/10-llm.sql
     networks:
     - platform
@@ -136,7 +129,6 @@ services:
     restart: unless-stopped
 
 
-  # ───────────────────────────── Ollama (model runtime) ─────────────────────
   ollama:
     image: ollama/ollama:latest
     container_name: rwp-ollama

@@ -26,12 +26,6 @@ class GraphRetrieval:
         )
 
     async def get_action_context(self, workflow_id: str) -> List[Dict[str, Any]]:
-        """
-        Mengambil contextual graph view:
-        - ACTION + role inference + next actions + APP relationship
-        - pemetaan reverse (HAS_REVERSE -> REVERSE_ACTION): reverse_action_name + status
-        """
-
         query = """
         MATCH (a:ACTION {workflow_id: $workflow_id})
         OPTIONAL MATCH (a)-[r:NEXT]->(b:ACTION)

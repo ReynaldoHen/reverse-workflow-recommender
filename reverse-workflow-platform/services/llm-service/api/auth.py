@@ -1,4 +1,3 @@
-"""JWT + static admin auth (thesis-grade, single admin account)."""
 import datetime as dt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer

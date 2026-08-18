@@ -1,21 +1,3 @@
-"""Translate intermediate workflow JSON -> Shuffle-native deployment JSON.
-
-Schema verified against the official shuffle-shared v0.9.91 Go structs
-(Action, Branch, Position, Workflow) used by the user's local Shuffle build.
-
-Key schema facts (authoritative, from structs.go):
-  * Action node id field is "id" (json:"id"), NOT "id_".
-  * Start-node flag is "isStartNode" (json:"isStartNode,omitempty"), camelCase.
-  * Actions carry: app_id, app_name, app_version, label, name, description,
-    environment, errors, is_valid, large_image, parameters, position,
-    priority, execution_delay, category.
-  * Branch carries: id, source_id, destination_id, label, has_errors,
-    conditions, decorator.
-  * Workflow carries: id, name, description, start, actions, branches,
-    triggers, is_valid, errors, tags, workflow_variables, comments.
-  * The workflow-level "start" field is the real determinant of the start
-    node, so it is always set to the first action's id.
-"""
 import uuid
 from .app_registry import app_registry
 from ..config import get_settings
@@ -28,7 +10,6 @@ class ShuffleTranslator:
         self.environment = environment
 
     def translate(self, intermediate: dict, environment: str | None = None) -> dict:
-        """Convert intermediate representation to Shuffle-native workflow JSON."""
         env = environment or self.environment
         name = intermediate.get("name", "Generated Workflow")
         description = intermediate.get("description", "")
@@ -121,7 +102,6 @@ class ShuffleTranslator:
 
     @staticmethod
     def validate_shuffle(wf: dict) -> list[str]:
-        """Validate against the required shuffle-shared workflow fields."""
         errors = []
         for field in ("id", "name", "actions", "start", "branches"):
             if field not in wf:

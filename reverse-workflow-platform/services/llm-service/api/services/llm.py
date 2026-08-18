@@ -1,4 +1,3 @@
-"""Ollama client wrapper with JSON-safe generation and retries."""
 import json
 import re
 import httpx
@@ -49,12 +48,6 @@ class LLM:
 
     @staticmethod
     def _strip_thinking(text: str) -> str:
-        """Buang blok reasoning Qwen3 agar tersisa konten/JSON.
-
-        Menangani <think>...</think> lengkap maupun penutup </think> saja.
-        JANGAN kembalikan string kosong bila pembersihan menghapus segalanya —
-        kembalikan teks asli agar pemanggil (_extract_json) tetap bisa mencari JSON.
-        """
         if not text:
             return text
         original = text
@@ -65,7 +58,6 @@ class LLM:
         return cleaned if cleaned else original.strip()
 
     async def complete_json(self, prompt: str, system: str = "") -> dict:
-        """Ask the model for JSON, retry, then fall back to regex extraction."""
         last_err = ""
         for _ in range(settings.llm_max_retries):
             raw = await self.complete(prompt, system=system)

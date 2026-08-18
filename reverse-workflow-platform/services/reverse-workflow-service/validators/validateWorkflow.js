@@ -42,10 +42,7 @@ function isNonEmptyString(val) {
   return typeof val === "string" && val.trim().length > 0
 }
 
-// ─────────────────────────────────────────────
 // LEVEL A — STRUCTURAL
-// ─────────────────────────────────────────────
-
 function validateStructure(workflow) {
   const errors = []
 
@@ -237,10 +234,7 @@ function validateStructure(workflow) {
   return errors
 }
 
-// ─────────────────────────────────────────────
 // LEVEL B — SEMANTIC (Neo4j)
-// ─────────────────────────────────────────────
-
 async function validateSemantic(workflow) {
   const errors  = []
   const session = driver.session()
@@ -336,10 +330,7 @@ async function validateSemantic(workflow) {
   return errors
 }
 
-// ─────────────────────────────────────────────
 // LEVEL C — RULE-BASED REVERSE MAPPING CHECK
-// ─────────────────────────────────────────────
-
 async function validateReverseMapping(workflow, workflowId) {
   const errors  = []
   if (!workflowId) return errors
@@ -471,10 +462,6 @@ async function getReviewRequiredFromGraph(workflowId) {
   }
 }
 
-// ─────────────────────────────────────────────
-// CORRECTION INSTRUCTIONS
-// ─────────────────────────────────────────────
-
 function buildCorrectionInstructions(errors) {
   const levels = [...new Set(errors.map(e => e.level))]
   const codes  = [...new Set(errors.map(e => e.code))]
@@ -515,7 +502,6 @@ function buildCorrectionInstructions(errors) {
 
 async function validateWorkflow(workflow, workflowId = null) {
 
-  // ── Level A ───────────────────────────────
   const structuralErrors = validateStructure(workflow)
 
   if (structuralErrors.length > 0) {
@@ -526,7 +512,6 @@ async function validateWorkflow(workflow, workflowId = null) {
     }
   }
 
-  // ── Level B ───────────────────────────────
   const semanticErrors = await validateSemantic(workflow)
 
   if (semanticErrors.length > 0) {
@@ -537,7 +522,6 @@ async function validateWorkflow(workflow, workflowId = null) {
     }
   }
 
-  // ── Level C — rule-based reverse mapping check ──
   const mappingErrors = await validateReverseMapping(workflow, workflowId)
 
   if (mappingErrors.length > 0) {

@@ -16,13 +16,6 @@ async def generate_reverse_workflow(
     db: Session = Depends(get_db),
     user: str = Depends(current_user),
 ):
-    """
-    Pipeline (ditangani Python):
-      1. Query Neo4j → ambil Action nodes + pemetaan HAS_REVERSE (disimpan Node.js di Step 4)
-      2. Build system prompt = graph context + reverse mapping + retry errors (jika ada)
-      3. Call Ollama → raw JSON string
-      4. Return raw_output ke Node.js untuk parsing + validasi + import Shuffle
-    """
     logger.info(
         "[/generate/reverse] workflow_id=%s  attempt=%s",
         req.workflow_id,

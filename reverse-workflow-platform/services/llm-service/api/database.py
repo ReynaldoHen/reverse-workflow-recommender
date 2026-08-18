@@ -1,4 +1,3 @@
-"""SQLAlchemy ORM models and session management."""
 import datetime as dt
 from sqlalchemy import create_engine, String, Integer, DateTime, Text, JSON
 from sqlalchemy.orm import (DeclarativeBase, Mapped, mapped_column, sessionmaker)

@@ -57,9 +57,6 @@ app.post("/api/reverse-workflow", async (req, res) => {
       maxRetries: 3
     })
 
-    // Kasus khusus: tidak ada aksi yang perlu dibalik (semua read-only/utilitas).
-    // Ini hasil SUKSES yang benar (no_auto_reverse), bukan kegagalan — tidak ada
-    // workflow yang diimpor ke Shuffle sehingga importResult null. Jangan akses .id.
     if (!llmResult.importResult || llmResult.note === "no_auto_reverse") {
       setStatus(workflow_id, "success", {
         note: "no_auto_reverse",

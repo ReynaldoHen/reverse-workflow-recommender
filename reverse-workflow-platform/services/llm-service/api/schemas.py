@@ -1,4 +1,3 @@
-"""Pydantic request/response models."""
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
@@ -82,17 +81,12 @@ class FeedbackRequest(BaseModel):
 
 
 class RetryError(BaseModel):
-    """Single validation error forwarded from Node.js on retry attempts."""
     code:     str
     location: str
     message:  str
  
  
 class RetryContext(BaseModel):
-    """
-    Populated by Node.js when forwarding validation errors back to the LLM.
-    Null on the first attempt; present on retries so the LLM can self-correct.
-    """
     attempt:                  int
     valid:                    bool = False
     errors:                   List[RetryError] = []
@@ -100,21 +94,12 @@ class RetryContext(BaseModel):
  
  
 class ReverseWorkflowRequest(BaseModel):
-    """
-    Request from reverse-workflow-service (Node.js) at Step 5.
-    The workflow graph must already be saved to Neo4j (done at Step 4).
-    """
     workflow_id:    str
     workflow_name:  str
     retry_context:  Optional[RetryContext] = None
  
  
 class ReverseWorkflowResponse(BaseModel):
-    """
-    Response back to reverse-workflow-service.
-    raw_output is the Ollama response string (may contain markdown code fences —
-    Node.js strips them before JSON.parse()).
-    """
     raw_output: Optional[str] = None
     error:      Optional[str] = None
     prompt:     Optional[str] = None

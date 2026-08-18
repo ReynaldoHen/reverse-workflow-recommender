@@ -1,9 +1,3 @@
-"""First-class Shuffle SOAR API client.
-
-The whole system flow connects to Shuffle through this client. When no live
-instance is configured (SHUFFLE_API_URL / SHUFFLE_API_KEY empty) it runs in
-OFFLINE/MOCK mode so the thesis demo still works end to end.
-"""
 import uuid
 import httpx
 from ..config import get_settings
@@ -48,11 +42,6 @@ class ShuffleClient:
             return r.json()
 
     async def deploy_workflow(self, workflow: dict) -> dict:
-        """Create a workflow in Shuffle (POST /api/v1/workflows -> SetNewWorkflow).
-
-        Offline mode returns a mock deployment id. Note Shuffle assigns its own
-        workflow id on creation, so we return whatever id it gives back.
-        """
         if not self.connected:
             return {"deployed": False, "mode": "offline",
                     "deployment_id": f"mock-{uuid.uuid4()}",
