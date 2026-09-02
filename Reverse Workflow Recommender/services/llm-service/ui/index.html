@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Playbook Recommender — Shuffle SOAR</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel-2:#1c2430; --line:#2b3645;
+    --ink:#e6edf3; --muted:#8b97a7; --accent:#3fb8af; --accent-2:#f2a65a;
+    --hi:#3fb87f; --med:#f2a65a; --lo:#e06c75; --mono:ui-monospace,"SF Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,Segoe UI,Roboto,sans-serif;line-height:1.5}
+  header{display:flex;align-items:center;justify-content:space-between;
+    padding:16px 28px;border-bottom:1px solid var(--line);background:var(--panel)}
+  .brand{display:flex;align-items:center;gap:12px;font-weight:600;letter-spacing:.3px}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+  .status{font:12px/1 var(--mono);color:var(--muted)}
+  main{max-width:980px;margin:0 auto;padding:28px 20px 80px}
+  .tabs{display:flex;gap:4px;margin-bottom:20px;border-bottom:1px solid var(--line)}
+  .tab{padding:10px 18px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;font-weight:500}
+  .tab.active{color:var(--ink);border-bottom-color:var(--accent)}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:22px;margin-bottom:18px}
+  label{display:block;font-size:13px;color:var(--muted);margin:0 0 6px}
+  textarea,input{width:100%;background:var(--panel-2);border:1px solid var(--line);
+    color:var(--ink);border-radius:8px;padding:11px 13px;font-size:14px;font-family:inherit}
+  textarea{min-height:84px;resize:vertical}
+  button{background:var(--accent);color:#04201d;border:0;border-radius:8px;padding:11px 20px;
+    font-weight:600;cursor:pointer;font-size:14px}
+  button:hover{filter:brightness(1.08)}
+  button.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+  .row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
+  .grow{flex:1;min-width:240px}
+  .hit{border:1px solid var(--line);border-radius:9px;padding:16px;margin-top:14px;background:var(--panel-2)}
+  .hit h3{margin:0 0 4px;font-size:16px}
+  .meta{display:flex;gap:10px;align-items:center;font-size:12px;color:var(--muted);margin-bottom:8px;flex-wrap:wrap}
+  .badge{font:11px/1 var(--mono);padding:4px 8px;border-radius:20px;border:1px solid var(--line)}
+  .b-high{color:var(--hi);border-color:var(--hi)} .b-med{color:var(--med);border-color:var(--med)}
+  .b-low{color:var(--lo);border-color:var(--lo)}
+  .steps{margin:10px 0 0;padding-left:0;list-style:none}
+  .steps li{padding:8px 0;border-top:1px solid var(--line);font-size:13px}
+  .steps b{color:var(--accent)}
+  .fallback{border:1px solid var(--accent-2);background:rgba(242,166,90,.07);border-radius:9px;padding:16px;margin-top:14px}
+  .fallback h3{margin:0 0 6px;color:var(--accent-2);font-size:15px}
+  pre{background:#0b0f14;border:1px solid var(--line);border-radius:8px;padding:14px;overflow:auto;
+    font:12.5px/1.5 var(--mono);color:#cdd9e5}
+  .muted{color:var(--muted);font-size:13px}
+  .login{max-width:340px;margin:90px auto;text-align:center}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="dot"></span> Playbook Recommender <span class="status">· Shuffle SOAR</span></div>
+  <div class="status" id="shuffleStatus">checking Shuffle…</div>
+</header>
+
+<main id="appView">
+  <div class="tabs">
+    <div class="tab active" data-tab="rec" onclick="switchTab('rec')">Recommend</div>
+    <div class="tab" data-tab="gen" onclick="switchTab('gen')">Generate workflow</div>
+  </div>
+
+  <section id="tab-rec">
+    <div class="panel">
+      <label>Describe the situation</label>
+      <textarea id="q" placeholder="e.g. Investigating a suspicious phishing email with a malicious attachment"></textarea>
+      <div class="row" style="margin-top:12px">
+        <button onclick="recommend()">Recommend playbooks</button>
+        <span class="muted">Returns top matches, explains each, and recommends an action if nothing fits.</span>
+      </div>
+    </div>
+    <div id="recOut"></div>
+  </section>
+
+  <section id="tab-gen" class="hidden">
+    <div class="panel">
+      <label>Describe the workflow you want to build</label>
+      <textarea id="d" placeholder="e.g. Detect ransomware on an endpoint, isolate it, open a Jira ticket, alert the SOC on Slack"></textarea>
+      <label style="margin-top:12px">Preferred integrations (comma-separated, optional)</label>
+      <input id="integ" placeholder="crowdstrike, jira, slack">
+      <div class="row" style="margin-top:12px">
+        <button onclick="generate()">Generate</button>
+        <span class="muted">If generation isn't possible or errors, a fallback action is shown.</span>
+      </div>
+    </div>
+    <div id="genOut"></div>
+  </section>
+</main>
+
+<script>
+const API = location.origin.replace(/:8080$/, ":8000") + "/api/v1";
+
+async function api(path, body){
+  const opt = {headers:{}};
+  if(body){opt.method="POST";opt.headers["Content-Type"]="application/json";opt.body=JSON.stringify(body);}
+  const r = await fetch(API+path, opt);
+  if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || r.status);
+  return r.json();
+}
+
+async function checkShuffle(){
+  try{ const s = await api("/shuffle/status");
+    shuffleStatus.textContent = s.connected ? "Shuffle: connected" : "Shuffle: offline (mock mode)";
+  }catch{ shuffleStatus.textContent = "Shuffle: unknown"; }
+}
+
+function switchTab(t){
+  document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.tab===t));
+  document.getElementById("tab-rec").classList.toggle("hidden",t!=="rec");
+  document.getElementById("tab-gen").classList.toggle("hidden",t!=="gen");
+}
+
+function band(c){return c==="high"?"b-high":c==="medium"?"b-med":"b-low";}
+function esc(s){return (s||"").replace(/[&<>]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[m]));}
+
+function renderFallback(a){
+  if(!a) return "";
+  const acts = (a.recommended_actions||[]).map(x=>`<li><b>${esc(x.action)}</b> — ${esc(x.detail)}</li>`).join("");
+  return `<div class="fallback"><h3>Recommended action</h3>
+    <div class="muted">Trigger: ${esc(a.trigger)} · ${esc(a.reason)}</div>
+    <ul class="steps">${acts}</ul>
+    ${a.closest_playbook?`<div class="muted">Closest existing playbook: <b>${esc(a.closest_playbook)}</b></div>`:""}
+  </div>`;
+}
+
+async function recommend(){
+  recOut.innerHTML = '<p class="muted">Working…</p>';
+  try{
+    const data = await api("/recommend",{query:q.value, explain:true});
+    let html="";
+    for(const h of data.results){
+      const steps=(h.steps||[]).map(s=>`<li><b>${s.order}. ${esc(s.title)}</b> — ${esc(s.detail||"")}</li>`).join("");
+      html += `<div class="hit"><h3>${esc(h.name)}</h3>
+        <div class="meta"><span class="badge ${band(h.confidence)}">${h.confidence} · ${h.score}</span>
+        <span>${esc(h.category)}</span></div>
+        <div>${esc(h.explanation||h.description)}</div>
+        <ul class="steps">${steps}</ul></div>`;
+    }
+    html += renderFallback(data.fallback_action);
+    if(!data.results.length && !data.fallback_action) html='<p class="muted">No results.</p>';
+    recOut.innerHTML = html;
+  }catch(e){ recOut.innerHTML = `<p class="muted">Error: ${esc(e.message)}</p>`; }
+}
+
+async function generate(){
+  genOut.innerHTML = '<p class="muted">Generating…</p>';
+  try{
+    const integs = integ.value.split(",").map(s=>s.trim()).filter(Boolean);
+    const data = await api("/generate/playbook",{description:d.value, target_integrations:integs, dry_run:true});
+    let html="";
+    if(data.success && data.shuffle_workflow){
+      html += `<div class="panel"><h3 style="margin-top:0">Shuffle workflow</h3>
+        <pre>${esc(JSON.stringify(data.shuffle_workflow,null,2))}</pre></div>`;
+    }
+    html += renderFallback(data.fallback_action);
+    if(data.error && !data.fallback_action) html += `<p class="muted">${esc(data.error)}</p>`;
+    genOut.innerHTML = html || '<p class="muted">No output.</p>';
+  }catch(e){ genOut.innerHTML = `<p class="muted">Error: ${esc(e.message)}</p>`; }
+}
+
+checkShuffle();
+</script>
+</body>
+</html>
