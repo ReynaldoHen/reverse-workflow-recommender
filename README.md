@@ -9,6 +9,8 @@ A Large Language Model-based system for automatically generating reverse workflo
 **Thesis**: Design and Implementation of a Reverse Workflow Recommendation System Prototype Utilizing Large Language Models on the Shuffle SOAR Platform
 - Authors: Reynaldo Henelson and Samuel Chandra Sutiaman
 
+<img width="913" height="461" alt="image" src="https://github.com/user-attachments/assets/84607fb0-38ac-4ac1-b90c-90e889a6716b" />
+
 ---
 
 ## Problem Statement
@@ -91,7 +93,6 @@ The system uses a **hybrid approach**:
 | **LLM Engine** | Ollama | Latest | Local inference runtime |
 | **Base Model** | Qwen3 8B | Q5_K_M (quant) | Reasoning on security action reversal |
 | **Relational DB** | PostgreSQL | 13+ | Action templates, app catalog (optional) |
-| **Search Cache** | Qdrant | Latest | Semantic search for action mapping (optional) |
 
 ---
 
@@ -516,16 +517,6 @@ Please see `CONTRIBUTING.md` for guidelines.
 - **GDPR**: No personal data sent to external LLM services (Ollama runs locally)
 - **HIPAA**: On-premises deployment supported
 - **SOC 2**: Audit logging available; see `monitoring/audit.log`
-
----
-
-## Roadmap
-
-- [ ] **v0.2**: GPU-accelerated inference, improved LLM prompt engineering
-- [ ] **v0.3**: User feedback loop for reversal quality scoring
-- [ ] **v0.4**: Batch processing for multi-workflow reversals
-- [ ] **v1.0**: Production-ready with comprehensive test coverage
-- [ ] **v1.1**: Integration with commercial SOAR platforms (if licensed)
 
 ---
 
