@@ -7,9 +7,12 @@
 A Large Language Model-based system for automatically generating reverse workflow recommendations on the Shuffle SOAR platform. Designed to help Security Operations Centers (SOCs) efficiently rollback false positive incidents by reconstructing the inverse of automated security actions.
 
 **Thesis**: Design and Implementation of a Reverse Workflow Recommendation System Prototype Utilizing Large Language Models on the Shuffle SOAR Platform
-- Authors: Reynaldo Henelson and Samuel Chandra Sutiaman
+
+Authors: Reynaldo Henelson and Samuel Chandra Sutiaman
+
 
 <img width="913" height="461" alt="image" src="https://github.com/user-attachments/assets/84607fb0-38ac-4ac1-b90c-90e889a6716b" />
+
 
 ---
 
